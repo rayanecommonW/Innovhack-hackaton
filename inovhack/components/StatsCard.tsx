@@ -14,6 +14,7 @@ interface StatsCardProps {
   level: number;
   xp: number;
   xpToNextLevel: number;
+  userName?: string;
 }
 
 const StatsCard: React.FC<StatsCardProps> = ({
@@ -24,6 +25,7 @@ const StatsCard: React.FC<StatsCardProps> = ({
   level,
   xp,
   xpToNextLevel,
+  userName,
 }) => {
   const xpProgress = (xp / xpToNextLevel) * 100;
 
@@ -37,7 +39,7 @@ const StatsCard: React.FC<StatsCardProps> = ({
         <View style={styles.xpContainer}>
           <View style={styles.xpHeader}>
             <Text style={styles.levelTitle}>
-              {level < 5 ? "Rookie" : level < 10 ? "Challenger" : level < 20 ? "Champion" : "Legend"}
+              {userName || (level < 5 ? "Rookie" : level < 10 ? "Challenger" : level < 20 ? "Champion" : "Legend")}
             </Text>
             <Text style={styles.xpText}>{xp}/{xpToNextLevel} XP</Text>
           </View>

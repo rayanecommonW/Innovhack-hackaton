@@ -152,8 +152,8 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <Animated.View style={[styles.welcomeContainer, welcomeContainerStyle]}>
-          {/* Logo with smooth zoom entrance */}
-          <Animated.View entering={ZoomIn.delay(200).duration(600).springify()}>
+          {/* Logo centered with smooth zoom */}
+          <Animated.View entering={ZoomIn.delay(200).duration(800).springify()}>
             <Image
               source={require("../../assets/images/logo_big.png")}
               style={styles.logoImage}
@@ -161,16 +161,8 @@ export default function HomeScreen() {
             />
           </Animated.View>
 
-          {/* Tagline appears right after logo */}
-          <Animated.Text
-            entering={FadeInDown.delay(500).duration(400).springify()}
-            style={styles.tagline}
-          >
-            Engage. Parie. Gagne.
-          </Animated.Text>
-
-          {/* CTA button slides up last */}
-          <Animated.View entering={FadeInUp.delay(800).duration(400).springify()}>
+          {/* CTA button right below logo */}
+          <Animated.View entering={FadeInUp.delay(600).duration(500).springify()}>
             <TouchableOpacity
               onPress={handleCommencer}
               style={styles.authButton}
@@ -236,57 +228,12 @@ export default function HomeScreen() {
         </Animated.View>
 
         {/* Stats Card - Level & XP */}
-        <StatsCard {...MOCK_STATS} />
+        <StatsCard {...MOCK_STATS} userName={user.name.split(" ")[0]} />
 
-        {/* Activity Feed */}
-        <ActivityFeed activities={MOCK_ACTIVITIES} />
-
-        {/* Streak Calendar */}
-        <StreakCalendar completedDays={MOCK_COMPLETED_DAYS} currentStreak={MOCK_STATS.streak} />
-
-        {/* Active Pacts Section - TOP PRIORITY */}
-        {activePacts.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.activePactsSection}>
-            <Text style={styles.sectionLabel}>MES PACTS EN COURS</Text>
-            <View style={styles.activePactsList}>
-              {activePacts.map((pact: any, index: number) => (
-                <Animated.View
-                  key={pact._id}
-                  entering={SlideInDown.delay(150 + index * 50).springify()}
-                >
-                  <TouchableOpacity
-                    onPress={() => handleSubmitProof(pact._id)}
-                    style={styles.activePactCard}
-                    activeOpacity={0.9}
-                  >
-                    <View style={styles.activePactGlow} />
-                    <View style={styles.activePactContent}>
-                      <View style={styles.activePactMain}>
-                        <Text style={styles.activePactTitle} numberOfLines={1}>
-                          {pact.challenge?.title || "Pact"}
-                        </Text>
-                        <Text style={styles.activePactCategory}>
-                          {pact.challenge?.category ? getCategoryName(pact.challenge.category) : ""}
-                        </Text>
-                      </View>
-                      <View style={styles.activePactRight}>
-                        <Text style={styles.activePactBet}>{pact.betAmount}€</Text>
-                        <View style={styles.proofButton}>
-                          <Ionicons name="camera" size={20} color={Colors.black} />
-                        </View>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                </Animated.View>
-              ))}
-            </View>
-          </Animated.View>
-        )}
-
-        {/* Main Actions */}
+        {/* Main Actions - Moved to middle */}
         <View style={styles.actionsContainer}>
           {/* Créer un Pact - BIG BUTTON */}
-          <Animated.View entering={FadeInDown.delay(200).springify()}>
+          <Animated.View entering={FadeInDown.delay(150).springify()}>
             <TouchableOpacity
               onPress={() => router.push("/create-challenge")}
               style={styles.mainButton}
@@ -303,7 +250,7 @@ export default function HomeScreen() {
           </Animated.View>
 
           {/* Rejoindre un Pact - BIG BUTTON that expands */}
-          <Animated.View entering={FadeInDown.delay(250).springify()}>
+          <Animated.View entering={FadeInDown.delay(200).springify()}>
             <TouchableOpacity
               onPress={() => setShowJoinOptions(!showJoinOptions)}
               style={[styles.mainButton, styles.joinMainButton]}
@@ -370,6 +317,51 @@ export default function HomeScreen() {
             </Animated.View>
           )}
         </View>
+
+        {/* Activity Feed */}
+        <ActivityFeed activities={MOCK_ACTIVITIES} />
+
+        {/* Streak Calendar */}
+        <StreakCalendar completedDays={MOCK_COMPLETED_DAYS} currentStreak={MOCK_STATS.streak} />
+
+        {/* Active Pacts Section - TOP PRIORITY */}
+        {activePacts.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.activePactsSection}>
+            <Text style={styles.sectionLabel}>MES PACTS EN COURS</Text>
+            <View style={styles.activePactsList}>
+              {activePacts.map((pact: any, index: number) => (
+                <Animated.View
+                  key={pact._id}
+                  entering={SlideInDown.delay(150 + index * 50).springify()}
+                >
+                  <TouchableOpacity
+                    onPress={() => handleSubmitProof(pact._id)}
+                    style={styles.activePactCard}
+                    activeOpacity={0.9}
+                  >
+                    <View style={styles.activePactGlow} />
+                    <View style={styles.activePactContent}>
+                      <View style={styles.activePactMain}>
+                        <Text style={styles.activePactTitle} numberOfLines={1}>
+                          {pact.challenge?.title || "Pact"}
+                        </Text>
+                        <Text style={styles.activePactCategory}>
+                          {pact.challenge?.category ? getCategoryName(pact.challenge.category) : ""}
+                        </Text>
+                      </View>
+                      <View style={styles.activePactRight}>
+                        <Text style={styles.activePactBet}>{pact.betAmount}€</Text>
+                        <View style={styles.proofButton}>
+                          <Ionicons name="camera" size={20} color={Colors.black} />
+                        </View>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </Animated.View>
+              ))}
+            </View>
+          </Animated.View>
+        )}
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -458,9 +450,9 @@ const styles = StyleSheet.create({
     letterSpacing: 12,
   },
   logoImage: {
-    width: 220,
-    height: 220,
-    marginBottom: Spacing.xl,
+    width: 280,
+    height: 280,
+    marginBottom: Spacing.xxl,
   },
   loadingDots: {
     flexDirection: "row",
@@ -593,8 +585,7 @@ const styles = StyleSheet.create({
   // Main Actions
   actionsContainer: {
     gap: Spacing.lg,
-    flex: 1,
-    justifyContent: "center",
+    marginBottom: Spacing.xl,
   },
   mainButton: {
     flexDirection: "row",
