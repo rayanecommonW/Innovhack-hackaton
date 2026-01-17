@@ -128,4 +128,52 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_status", ["status"]),
+
+  // Groupes d'amis
+  groups: defineTable({
+    name: v.string(),
+    creatorId: v.id("users"),
+    inviteCode: v.string(), // Code 6 caractères pour inviter
+    createdAt: v.number(),
+  })
+    .index("by_creator", ["creatorId"])
+    .index("by_invite_code", ["inviteCode"]),
+
+  // Membres des groupes
+  groupMembers: defineTable({
+    groupId: v.id("groups"),
+    userId: v.id("users"),
+    role: v.string(), // "admin", "member"
+    joinedAt: v.number(),
+  })
+    .index("by_group", ["groupId"])
+    .index("by_user", ["userId"])
+    .index("by_group_user", ["groupId", "userId"]),
+
+  // Tâches récurrentes de groupe
+  groupTasks: defineTable({
+    groupId: v.id("groups"),
+    title: v.string(),
+    description: v.optional(v.string()),
+    frequency: v.string(), // "daily", "weekly", "monthly", "yearly"
+    betAmount: v.number(), // Montant misé par personne
+    creatorId: v.id("users"),
+    status: v.string(), // "active", "completed", "cancelled"
+    createdAt: v.number(),
+  })
+    .index("by_group", ["groupId"])
+    .index("by_status", ["status"]),
+
+  // Progression des membres sur les tâches
+  taskProgress: defineTable({
+    taskId: v.id("groupTasks"),
+    userId: v.id("users"),
+    periodStart: v.number(), // Début de la période (jour/semaine/mois/année)
+    completed: v.boolean(),
+    proofUrl: v.optional(v.string()),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_task", ["taskId"])
+    .index("by_user", ["userId"])
+    .index("by_task_user", ["taskId", "userId"]),
 });

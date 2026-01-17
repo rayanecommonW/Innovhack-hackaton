@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
   balanceAmount: {
     fontSize: 36,
     fontWeight: "700",
-    color: Colors.accent,
+    color: Colors.success,
     marginBottom: Spacing.lg,
   },
   addFundsButton: {
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
   },
   pactBet: {
     ...Typography.labelLarge,
-    color: Colors.accent,
+    color: Colors.success,
   },
   submitProofButton: {
     width: 40,

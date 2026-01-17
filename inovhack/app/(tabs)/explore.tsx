@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +19,7 @@ import { Id } from "../../convex/_generated/dataModel";
 import Animated, {
   FadeInDown,
   FadeInRight,
+  FadeInUp,
 } from "react-native-reanimated";
 import { CATEGORIES, getCategoryName } from "../../constants/categories";
 import CategoryPickerModal from "../../components/CategoryPickerModal";
@@ -26,7 +28,21 @@ import {
   Spacing,
   BorderRadius,
   Typography,
+  Shadows,
 } from "../../constants/theme";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// Content filter - block inappropriate content
+const BLOCKED_WORDS = [
+  "branler", "masturb", "sexe", "porn", "nude", "naked", "xxx",
+  "bite", "queue", "couille", "nichon", "sein", "cul",
+];
+
+const isContentAppropriate = (text: string): boolean => {
+  const lowerText = text.toLowerCase();
+  return !BLOCKED_WORDS.some(word => lowerText.includes(word));
+};
 
 export default function ExploreScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -43,8 +59,13 @@ export default function ExploreScreen() {
     setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
+  // Filter challenges with content moderation
   const filteredChallenges =
     challenges?.filter((c: any) => {
+      // Content moderation
+      if (!isContentAppropriate(c.title) || !isContentAppropriate(c.description || "")) {
+        return false;
+      }
       const matchesCategory =
         !selectedCategory || c.category === selectedCategory;
       const matchesSearch = c.title
@@ -54,6 +75,11 @@ export default function ExploreScreen() {
       const isSponsored = !!c.sponsorName;
       return matchesCategory && matchesSearch && !isSponsored;
     }) || [];
+
+  // Filter sponsored challenges too
+  const filteredSponsored = sponsoredChallenges?.filter((c: any) => {
+    return isContentAppropriate(c.title) && isContentAppropriate(c.description || "");
+  }) || [];
 
   const handleJoinChallenge = (challengeId: Id<"challenges">) => {
     router.push({ pathname: "/join-challenge", params: { challengeId } });
@@ -86,6 +112,7 @@ export default function ExploreScreen() {
         {/* Header */}
         <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.header}>
           <Text style={styles.headerTitle}>Explorer</Text>
+          <Text style={styles.headerSubtitle}>Découvre les pacts de la communauté</Text>
         </Animated.View>
 
         {/* Search */}
@@ -93,12 +120,12 @@ export default function ExploreScreen() {
           <View style={[styles.searchContainer, isSearchFocused && styles.searchContainerFocused]}>
             <Ionicons
               name="search"
-              size={20}
+              size={22}
               color={isSearchFocused ? Colors.textPrimary : Colors.textTertiary}
             />
             <TextInput
               style={styles.searchInput}
-              placeholder="Rechercher"
+              placeholder="Rechercher un pact..."
               placeholderTextColor={Colors.textTertiary}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -108,7 +135,7 @@ export default function ExploreScreen() {
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery("")}>
-                <Ionicons name="close-circle" size={20} color={Colors.textTertiary} />
+                <Ionicons name="close-circle" size={22} color={Colors.textTertiary} />
               </TouchableOpacity>
             )}
           </View>
@@ -120,56 +147,67 @@ export default function ExploreScreen() {
             onPress={() => setShowCategoryModal(true)}
             style={styles.categoryFilterButton}
           >
-            <Ionicons name="options-outline" size={18} color={Colors.textPrimary} />
+            <Ionicons name="options-outline" size={20} color={Colors.textPrimary} />
             <Text style={styles.categoryFilterText}>
               {selectedCategory ? getCategoryName(selectedCategory) : "99+ catégories"}
             </Text>
-            <Ionicons name="chevron-down" size={16} color={Colors.textTertiary} />
+            <Ionicons name="chevron-down" size={18} color={Colors.textTertiary} />
           </TouchableOpacity>
 
           {selectedCategory && (
             <TouchableOpacity onPress={clearCategory} style={styles.clearCategoryButton}>
-              <Ionicons name="close" size={18} color={Colors.textPrimary} />
+              <Ionicons name="close" size={20} color={Colors.textPrimary} />
             </TouchableOpacity>
           )}
         </Animated.View>
 
         {/* Sponsored Pacts Section */}
-        {sponsoredChallenges && sponsoredChallenges.length > 0 && (
+        {filteredSponsored.length > 0 && (
           <Animated.View entering={FadeInDown.delay(140).springify()} style={styles.sponsoredSection}>
-            <Text style={styles.sectionTitle}>PACTS SPONSORISÉS</Text>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="star" size={18} color={Colors.accent} />
+              <Text style={styles.sectionTitle}>PACTS SPONSORISÉS</Text>
+            </View>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.sponsoredList}
             >
-              {sponsoredChallenges.map((challenge: any, index: number) => (
-                <TouchableOpacity
+              {filteredSponsored.map((challenge: any, index: number) => (
+                <Animated.View
                   key={challenge._id}
-                  onPress={() => handleJoinChallenge(challenge._id)}
-                  style={styles.sponsoredCard}
-                  activeOpacity={0.85}
+                  entering={FadeInRight.delay(160 + index * 50).springify()}
                 >
-                  <View style={styles.sponsorBadge}>
-                    <Text style={styles.sponsorBadgeText}>{challenge.sponsorName}</Text>
-                  </View>
-                  <Text style={styles.sponsoredTitle} numberOfLines={2}>
-                    {challenge.title}
-                  </Text>
-                  <View style={styles.sponsoredFooter}>
-                    <Text style={styles.sponsoredBet}>{challenge.minBet}€</Text>
-                    {challenge.sponsorReward && (
-                      <Text style={styles.sponsoredReward}>+{challenge.sponsorReward}€</Text>
-                    )}
-                  </View>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleJoinChallenge(challenge._id)}
+                    style={styles.sponsoredCard}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.sponsorBadge}>
+                      <Ionicons name="checkmark-circle" size={14} color={Colors.black} />
+                      <Text style={styles.sponsorBadgeText}>{challenge.sponsorName}</Text>
+                    </View>
+                    <Text style={styles.sponsoredTitle} numberOfLines={2}>
+                      {challenge.title}
+                    </Text>
+                    <View style={styles.sponsoredFooter}>
+                      <Text style={styles.sponsoredBet}>{challenge.minBet}€</Text>
+                      {challenge.sponsorReward && (
+                        <View style={styles.rewardBadge}>
+                          <Text style={styles.sponsoredReward}>+{challenge.sponsorReward}€</Text>
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                </Animated.View>
               ))}
             </ScrollView>
           </Animated.View>
         )}
 
         {/* All Pacts Section */}
-        <Animated.View entering={FadeInDown.delay(160).springify()}>
+        <Animated.View entering={FadeInDown.delay(160).springify()} style={styles.sectionHeader}>
+          <Ionicons name="globe" size={18} color={Colors.info} />
           <Text style={styles.sectionTitle}>PACTS COMMUNAUTAIRES</Text>
         </Animated.View>
 
@@ -180,15 +218,16 @@ export default function ExploreScreen() {
           </View>
         ) : filteredChallenges.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="search-outline" size={32} color={Colors.textTertiary} />
-            <Text style={styles.emptyStateText}>Aucun pact trouvé</Text>
+            <Ionicons name="search-outline" size={48} color={Colors.textTertiary} />
+            <Text style={styles.emptyStateTitle}>Aucun pact trouvé</Text>
+            <Text style={styles.emptyStateText}>Essaie une autre recherche</Text>
           </View>
         ) : (
           <View style={styles.challengesList}>
             {filteredChallenges.map((challenge: any, index: number) => (
               <Animated.View
                 key={challenge._id}
-                entering={FadeInRight.delay(180 + index * 30).springify()}
+                entering={FadeInUp.delay(180 + index * 40).springify()}
               >
                 <TouchableOpacity
                   onPress={() => handleJoinChallenge(challenge._id)}
@@ -196,16 +235,22 @@ export default function ExploreScreen() {
                   activeOpacity={0.85}
                 >
                   <View style={styles.challengeMain}>
-                    <Text style={styles.challengeTitle} numberOfLines={1}>
+                    <Text style={styles.challengeTitle} numberOfLines={2}>
                       {challenge.title}
                     </Text>
-                    <Text style={styles.challengeCategory} numberOfLines={1}>
-                      {getCategoryName(challenge.category)}
-                    </Text>
+                    <View style={styles.challengeMeta}>
+                      <View style={styles.categoryBadge}>
+                        <Text style={styles.challengeCategory}>
+                          {getCategoryName(challenge.category)}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
                   <View style={styles.challengeRight}>
                     <Text style={styles.challengeBet}>{challenge.minBet}€</Text>
-                    <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
+                    <View style={styles.joinArrow}>
+                      <Ionicons name="arrow-forward" size={20} color={Colors.black} />
+                    </View>
                   </View>
                 </TouchableOpacity>
               </Animated.View>
@@ -243,8 +288,14 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
   headerTitle: {
-    ...Typography.headlineLarge,
+    fontSize: 32,
+    fontWeight: "800",
     color: Colors.textPrimary,
+  },
+  headerSubtitle: {
+    ...Typography.bodyMedium,
+    color: Colors.textTertiary,
+    marginTop: Spacing.xs,
   },
   searchContainer: {
     flexDirection: "row",
@@ -253,8 +304,8 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.xl,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 2,
     borderColor: Colors.border,
     gap: Spacing.sm,
     marginBottom: Spacing.md,
@@ -264,7 +315,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    ...Typography.bodyMedium,
+    ...Typography.bodyLarge,
     color: Colors.textPrimary,
     padding: 0,
   },
@@ -279,20 +330,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: Colors.surfaceElevated,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
     borderRadius: BorderRadius.full,
     borderWidth: 1,
     borderColor: Colors.border,
-    gap: Spacing.xs,
+    gap: Spacing.sm,
   },
   categoryFilterText: {
-    ...Typography.labelSmall,
+    ...Typography.labelMedium,
     color: Colors.textPrimary,
   },
   clearCategoryButton: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderRadius: BorderRadius.full,
     backgroundColor: Colors.surfaceElevated,
     justifyContent: "center",
@@ -300,36 +351,47 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  sponsoredSection: {
-    marginBottom: Spacing.xl,
+  // Section Header
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
   sectionTitle: {
     ...Typography.labelSmall,
     color: Colors.textTertiary,
-    letterSpacing: 1,
-    paddingHorizontal: Spacing.xl,
-    marginBottom: Spacing.md,
+    letterSpacing: 1.5,
+  },
+  // Sponsored Section
+  sponsoredSection: {
+    marginBottom: Spacing.xxl,
   },
   sponsoredList: {
     paddingHorizontal: Spacing.xl,
     gap: Spacing.md,
   },
   sponsoredCard: {
-    width: 200,
+    width: 240,
     backgroundColor: Colors.surfaceElevated,
     borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    borderWidth: 1,
+    padding: Spacing.xl,
+    borderWidth: 2,
     borderColor: Colors.accent,
     marginRight: Spacing.md,
+    ...Shadows.md,
   },
   sponsorBadge: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: Colors.accent,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.full,
     alignSelf: "flex-start",
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.md,
+    gap: Spacing.xs,
   },
   sponsorBadgeText: {
     ...Typography.labelSmall,
@@ -337,24 +399,36 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   sponsoredTitle: {
-    ...Typography.labelLarge,
+    fontSize: 18,
+    fontWeight: "700",
     color: Colors.textPrimary,
-    marginBottom: Spacing.md,
-    minHeight: 44,
+    marginBottom: Spacing.lg,
+    minHeight: 48,
   },
   sponsoredFooter: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.sm,
+    gap: Spacing.md,
   },
   sponsoredBet: {
-    ...Typography.labelMedium,
+    fontSize: 18,
+    fontWeight: "700",
     color: Colors.textSecondary,
   },
+  rewardBadge: {
+    backgroundColor: Colors.successMuted,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.success,
+  },
   sponsoredReward: {
-    ...Typography.labelMedium,
+    fontSize: 16,
+    fontWeight: "800",
     color: Colors.success,
   },
+  // Loading & Empty
   loadingSection: {
     padding: Spacing.huge,
     alignItems: "center",
@@ -364,43 +438,70 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.huge,
     gap: Spacing.md,
   },
+  emptyStateTitle: {
+    ...Typography.headlineSmall,
+    color: Colors.textPrimary,
+  },
   emptyStateText: {
     ...Typography.bodyMedium,
     color: Colors.textTertiary,
   },
+  // Challenge Cards - BIGGER
   challengesList: {
     paddingHorizontal: Spacing.xl,
-    gap: Spacing.sm,
+    gap: Spacing.md,
   },
   challengeCard: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
     borderWidth: 1,
     borderColor: Colors.border,
+    ...Shadows.sm,
   },
   challengeMain: {
     flex: 1,
-    gap: Spacing.xs,
+    gap: Spacing.sm,
   },
   challengeTitle: {
-    ...Typography.labelLarge,
+    fontSize: 18,
+    fontWeight: "700",
     color: Colors.textPrimary,
+    lineHeight: 24,
   },
-  challengeCategory: {
-    ...Typography.bodySmall,
-    color: Colors.textTertiary,
-  },
-  challengeRight: {
+  challengeMeta: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
   },
+  categoryBadge: {
+    backgroundColor: Colors.surfaceHighlight,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+  },
+  challengeCategory: {
+    ...Typography.labelSmall,
+    color: Colors.textSecondary,
+  },
+  challengeRight: {
+    alignItems: "flex-end",
+    gap: Spacing.sm,
+  },
   challengeBet: {
-    ...Typography.labelLarge,
-    color: Colors.accent,
+    fontSize: 24,
+    fontWeight: "800",
+    color: Colors.success,
+  },
+  joinArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.accent,
+    justifyContent: "center",
+    alignItems: "center",
   },
   bottomSpacer: {
     height: 120,

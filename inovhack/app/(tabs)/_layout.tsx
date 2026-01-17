@@ -11,7 +11,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, BorderRadius, Animations } from '../../constants/theme';
 
-type TabIconName = 'home' | 'compass' | 'gift' | 'person';
+type TabIconName = 'home' | 'compass' | 'people' | 'person';
 
 interface TabBarIconProps {
   name: TabIconName;
@@ -55,7 +55,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const tabs = [
     { name: 'home', icon: 'home' as TabIconName, label: 'Accueil' },
     { name: 'explore', icon: 'compass' as TabIconName, label: 'Explorer' },
-    { name: 'rewards', icon: 'gift' as TabIconName, label: 'Gains' },
+    { name: 'groups', icon: 'people' as TabIconName, label: 'Groupes' },
     { name: 'profile', icon: 'person' as TabIconName, label: 'Profil' },
   ];
 
@@ -129,9 +129,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="groups"
+        options={{
+          title: 'Groupes',
+        }}
+      />
+      <Tabs.Screen
         name="rewards"
         options={{
-          title: 'Gains',
+          href: null,
         }}
       />
       <Tabs.Screen

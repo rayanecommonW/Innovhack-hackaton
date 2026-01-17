@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Image,
   Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -326,12 +327,16 @@ export default function SubmitProofScreen() {
   // Form State
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardView}
       >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
         {/* Header */}
         <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
@@ -425,7 +430,8 @@ export default function SubmitProofScreen() {
         </Animated.View>
 
         <View style={styles.bottomSpacer} />
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -434,6 +440,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  keyboardView: {
+    flex: 1,
   },
   centered: {
     flex: 1,

@@ -9,6 +9,8 @@ import {
   StyleSheet,
   Platform,
   Alert,
+  KeyboardAvoidingView,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "convex/react";
@@ -100,8 +102,13 @@ export default function AddFundsModal({
       transparent
       onRequestClose={handleClose}
     >
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.overlay}
+      >
+        <Pressable style={styles.backdrop} onPress={handleClose} />
         <View style={styles.container}>
+          <View style={styles.handle} />
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Ajouter des fonds</Text>
@@ -259,7 +266,7 @@ export default function AddFundsModal({
             )}
           </TouchableOpacity>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -270,12 +277,23 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.overlay,
     justifyContent: "flex-end",
   },
+  backdrop: {
+    flex: 1,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    backgroundColor: Colors.border,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: Spacing.lg,
+  },
   container: {
     backgroundColor: Colors.surface,
     borderTopLeftRadius: BorderRadius.xxl,
     borderTopRightRadius: BorderRadius.xxl,
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.xl,
+    paddingTop: Spacing.md,
     paddingBottom: Spacing.huge,
   },
   header: {
@@ -324,8 +342,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   quickAmountSelected: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
+    backgroundColor: Colors.success,
+    borderColor: Colors.success,
   },
   quickAmountText: {
     ...Typography.labelMedium,

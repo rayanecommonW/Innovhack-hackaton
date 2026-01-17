@@ -11,6 +11,7 @@
 import type * as ai from "../ai.js";
 import type * as challenges from "../challenges.js";
 import type * as files from "../files.js";
+import type * as groups from "../groups.js";
 import type * as participations from "../participations.js";
 import type * as proofs from "../proofs.js";
 import type * as rewards from "../rewards.js";
@@ -28,6 +29,7 @@ declare const fullApi: ApiFromModules<{
   ai: typeof ai;
   challenges: typeof challenges;
   files: typeof files;
+  groups: typeof groups;
   participations: typeof participations;
   proofs: typeof proofs;
   rewards: typeof rewards;
