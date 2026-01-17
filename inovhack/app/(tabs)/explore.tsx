@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -7,28 +7,40 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  StyleSheet,
+  FlatList,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { useAuth } from "../../providers/AuthProvider";
 import { router } from "expo-router";
 import { Id } from "../../convex/_generated/dataModel";
+import Animated, {
+  FadeInDown,
+  FadeInRight,
+} from "react-native-reanimated";
+import {
+  Colors,
+  Spacing,
+  BorderRadius,
+  Typography,
+} from "../../constants/theme";
 
 const categories = [
-  { id: "all", name: "Tous", icon: "🔥" },
-  { id: "sport", name: "Sport", icon: "🏋️" },
-  { id: "procrastination", name: "Productivité", icon: "💼" },
-  { id: "screen_time", name: "Screen Time", icon: "📱" },
-  { id: "social", name: "Social", icon: "💬" },
+  { id: "all", name: "Tous" },
+  { id: "sport", name: "Sport" },
+  { id: "procrastination", name: "Productivité" },
+  { id: "screen_time", name: "Screen Time" },
+  { id: "social", name: "Social" },
 ];
 
 export default function ExploreScreen() {
-  const { userId } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const categoriesRef = useRef<FlatList>(null);
 
   const challenges = useQuery(api.challenges.listPublicChallenges);
 
@@ -37,221 +49,276 @@ export default function ExploreScreen() {
     setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
-  const filteredChallenges = challenges?.filter((c) => {
-    const matchesCategory = selectedCategory === "all" || c.category === selectedCategory;
-    const matchesSearch = c.title.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  }) || [];
+  const filteredChallenges =
+    challenges?.filter((c: any) => {
+      const matchesCategory =
+        selectedCategory === "all" || c.category === selectedCategory;
+      const matchesSearch = c.title
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    }) || [];
 
   const handleJoinChallenge = (challengeId: Id<"challenges">) => {
     router.push({ pathname: "/join-challenge", params: { challengeId } });
   };
 
+  const handleCategorySelect = (categoryId: string) => {
+    setSelectedCategory(categoryId);
+    const index = categories.findIndex((c) => c.id === categoryId);
+    if (index !== -1 && categoriesRef.current) {
+      categoriesRef.current.scrollToIndex({
+        index,
+        animated: true,
+        viewPosition: 0.5,
+      });
+    }
+  };
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#000" }}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20 }}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.accent}
+          />
         }
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
-        <View style={{ marginBottom: 24 }}>
-          <Text style={{ color: "#fff", fontSize: 32, fontWeight: "bold" }}>Explorer</Text>
-          <Text style={{ color: "#666", fontSize: 16, marginTop: 4 }}>
-            Découvre les défis et les sponsors
-          </Text>
-        </View>
+        <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.header}>
+          <Text style={styles.headerTitle}>Explorer</Text>
+        </Animated.View>
 
-        {/* Search Bar */}
-        <View
-          style={{
-            backgroundColor: "#1A1A1A",
-            borderRadius: 16,
-            flexDirection: "row",
-            alignItems: "center",
-            paddingHorizontal: 16,
-            marginBottom: 24,
-          }}
-        >
-          <Ionicons name="search" size={20} color="#666" />
-          <TextInput
-            style={{ flex: 1, color: "#fff", paddingVertical: 16, paddingHorizontal: 12, fontSize: 16 }}
-            placeholder="Rechercher un défi..."
-            placeholderTextColor="#666"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
+        {/* Search */}
+        <Animated.View entering={FadeInDown.delay(100).springify()}>
+          <View style={[styles.searchContainer, isSearchFocused && styles.searchContainerFocused]}>
+            <Ionicons
+              name="search"
+              size={20}
+              color={isSearchFocused ? Colors.textPrimary : Colors.textTertiary}
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Rechercher"
+              placeholderTextColor={Colors.textTertiary}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery("")}>
+                <Ionicons name="close-circle" size={20} color={Colors.textTertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </Animated.View>
 
         {/* Categories */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginBottom: 24 }}
-          contentContainerStyle={{ gap: 10 }}
-        >
-          {categories.map((cat) => (
-            <TouchableOpacity
-              key={cat.id}
-              onPress={() => setSelectedCategory(cat.id)}
-              style={{
-                backgroundColor: selectedCategory === cat.id ? "#fff" : "#1A1A1A",
-                paddingHorizontal: 20,
-                paddingVertical: 12,
-                borderRadius: 24,
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <Text style={{ fontSize: 16 }}>{cat.icon}</Text>
-              <Text
-                style={{
-                  color: selectedCategory === cat.id ? "#000" : "#fff",
-                  fontWeight: "600",
-                }}
-              >
-                {cat.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Create Challenge Banner */}
-        <TouchableOpacity
-          onPress={() => router.push("/create-challenge")}
-          style={{
-            backgroundColor: "#1A1A1A",
-            borderRadius: 20,
-            padding: 20,
-            marginBottom: 24,
-            borderWidth: 1,
-            borderColor: "#2A2A2A",
-            borderStyle: "dashed",
-          }}
-        >
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: "#fff", fontSize: 18, fontWeight: "bold", marginBottom: 4 }}>
-                Créer ton propre défi
-              </Text>
-              <Text style={{ color: "#666", fontSize: 14 }}>
-                Invite tes amis et pariez ensemble
-              </Text>
-            </View>
-            <View
-              style={{
-                width: 50,
-                height: 50,
-                backgroundColor: "#fff",
-                borderRadius: 25,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Ionicons name="add" size={28} color="#000" />
-            </View>
-          </View>
-        </TouchableOpacity>
-
-        {/* Challenge Cards */}
-        <View style={{ marginBottom: 120 }}>
-          <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold", marginBottom: 16 }}>
-            Défis disponibles ({filteredChallenges.length})
-          </Text>
-
-          {challenges === undefined ? (
-            <ActivityIndicator color="#fff" style={{ marginTop: 20 }} />
-          ) : filteredChallenges.length === 0 ? (
-            <View
-              style={{
-                backgroundColor: "#1A1A1A",
-                borderRadius: 20,
-                padding: 24,
-                alignItems: "center",
-              }}
-            >
-              <Text style={{ fontSize: 40, marginBottom: 12 }}>🔍</Text>
-              <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
-                Aucun défi trouvé
-              </Text>
-              <Text style={{ color: "#666", fontSize: 14, textAlign: "center", marginTop: 4 }}>
-                Crée le premier défi dans cette catégorie !
-              </Text>
-            </View>
-          ) : (
-            filteredChallenges.map((challenge) => (
+        <Animated.View entering={FadeInDown.delay(150).springify()} style={styles.categoriesWrapper}>
+          <FlatList
+            ref={categoriesRef}
+            data={categories}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoriesContent}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
               <TouchableOpacity
-                key={challenge._id}
-                onPress={() => handleJoinChallenge(challenge._id)}
-                style={{
-                  backgroundColor: "#1A1A1A",
-                  borderRadius: 20,
-                  padding: 20,
-                  marginBottom: 12,
-                }}
+                onPress={() => handleCategorySelect(item.id)}
+                style={[
+                  styles.categoryChip,
+                  selectedCategory === item.id && styles.categoryChipSelected,
+                ]}
+                activeOpacity={0.8}
               >
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-                    <View
-                      style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 16,
-                        backgroundColor: "#2A2A2A",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        marginRight: 12,
-                      }}
-                    >
-                      <Text style={{ fontSize: 24 }}>
-                        {challenge.category === "sport" ? "🏋️" :
-                         challenge.category === "screen_time" ? "📱" :
-                         challenge.category === "procrastination" ? "💼" :
-                         challenge.category === "social" ? "💬" : "🎯"}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
-                        {challenge.title}
-                      </Text>
-                      <Text style={{ color: "#666", fontSize: 13, marginTop: 2 }}>
-                        {challenge.goal}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <View style={{ flexDirection: "row", gap: 16 }}>
-                    <View>
-                      <Text style={{ color: "#666", fontSize: 12 }}>Mise min</Text>
-                      <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>
-                        {challenge.minBet}€
-                      </Text>
-                    </View>
-                    <View>
-                      <Text style={{ color: "#666", fontSize: 12 }}>Type</Text>
-                      <Text style={{ color: "#22c55e", fontSize: 14, fontWeight: "600" }}>
-                        {challenge.type === "public" ? "Public" : "Amis"}
-                      </Text>
-                    </View>
-                  </View>
-                  {challenge.sponsorName && (
-                    <View style={{ backgroundColor: "#2A2A2A", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}>
-                      <Text style={{ color: "#fff", fontSize: 11, fontWeight: "600" }}>
-                        🎁 {challenge.sponsorName}
-                      </Text>
-                    </View>
-                  )}
-                </View>
+                <Text
+                  style={[
+                    styles.categoryText,
+                    selectedCategory === item.id && styles.categoryTextSelected,
+                  ]}
+                >
+                  {item.name}
+                </Text>
               </TouchableOpacity>
-            ))
-          )}
-        </View>
+            )}
+            getItemLayout={(data, index) => ({
+              length: 100,
+              offset: 100 * index,
+              index,
+            })}
+          />
+        </Animated.View>
+
+        {/* Challenges */}
+        {challenges === undefined ? (
+          <View style={styles.loadingSection}>
+            <ActivityIndicator color={Colors.accent} size="large" />
+          </View>
+        ) : filteredChallenges.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="search-outline" size={32} color={Colors.textTertiary} />
+            <Text style={styles.emptyStateText}>Aucun pact trouvé</Text>
+          </View>
+        ) : (
+          <View style={styles.challengesList}>
+            {filteredChallenges.map((challenge: any, index: number) => (
+              <Animated.View
+                key={challenge._id}
+                entering={FadeInRight.delay(200 + index * 30).springify()}
+              >
+                <TouchableOpacity
+                  onPress={() => handleJoinChallenge(challenge._id)}
+                  style={styles.challengeCard}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.challengeMain}>
+                    <Text style={styles.challengeTitle} numberOfLines={1}>
+                      {challenge.title}
+                    </Text>
+                    <Text style={styles.challengeGoal} numberOfLines={1}>
+                      {challenge.goal}
+                    </Text>
+                  </View>
+                  <View style={styles.challengeRight}>
+                    <Text style={styles.challengeBet}>{challenge.minBet}€</Text>
+                    <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
+            ))}
+          </View>
+        )}
+
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingTop: Spacing.lg,
+  },
+  header: {
+    paddingHorizontal: Spacing.xl,
+    marginBottom: Spacing.xl,
+  },
+  headerTitle: {
+    ...Typography.headlineLarge,
+    color: Colors.textPrimary,
+  },
+  searchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surfaceElevated,
+    marginHorizontal: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  searchContainerFocused: {
+    borderColor: Colors.accent,
+  },
+  searchInput: {
+    flex: 1,
+    ...Typography.bodyMedium,
+    color: Colors.textPrimary,
+    padding: 0,
+  },
+  categoriesWrapper: {
+    marginBottom: Spacing.xl,
+  },
+  categoriesContent: {
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.sm,
+  },
+  categoryChip: {
+    backgroundColor: Colors.surfaceElevated,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginRight: Spacing.sm,
+  },
+  categoryChipSelected: {
+    backgroundColor: Colors.textPrimary,
+    borderColor: Colors.textPrimary,
+  },
+  categoryText: {
+    ...Typography.labelMedium,
+    color: Colors.textSecondary,
+  },
+  categoryTextSelected: {
+    color: Colors.black,
+  },
+  loadingSection: {
+    padding: Spacing.huge,
+    alignItems: "center",
+  },
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: Spacing.huge,
+    gap: Spacing.md,
+  },
+  emptyStateText: {
+    ...Typography.bodyMedium,
+    color: Colors.textTertiary,
+  },
+  challengesList: {
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.sm,
+  },
+  challengeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  challengeMain: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  challengeTitle: {
+    ...Typography.labelLarge,
+    color: Colors.textPrimary,
+  },
+  challengeGoal: {
+    ...Typography.bodySmall,
+    color: Colors.textTertiary,
+  },
+  challengeRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  challengeBet: {
+    ...Typography.labelLarge,
+    color: Colors.accent,
+  },
+  bottomSpacer: {
+    height: 120,
+  },
+});

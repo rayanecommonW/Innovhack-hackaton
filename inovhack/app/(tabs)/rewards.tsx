@@ -6,17 +6,25 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  StyleSheet,
   Alert,
-  Clipboard,
+  Share,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useAuth } from "../../providers/AuthProvider";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import {
+  Colors,
+  Spacing,
+  BorderRadius,
+  Typography,
+} from "../../constants/theme";
 
 export default function RewardsScreen() {
-  const { user, userId } = useAuth();
+  const { userId } = useAuth();
   const [refreshing, setRefreshing] = React.useState(false);
 
   const rewards = useQuery(
@@ -34,224 +42,215 @@ export default function RewardsScreen() {
     setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
-  const copyCode = (code: string) => {
-    Clipboard.setString(code);
-    Alert.alert("Copié !", `Le code ${code} a été copié`);
+  const shareCode = async (code: string) => {
+    try {
+      await Share.share({ message: code });
+    } catch (error) {
+      Alert.alert("Code", code);
+    }
   };
 
-  const totalSaved = rewards?.reduce((sum, r) => sum + r.amount, 0) || 0;
+  const totalEarned = rewards?.reduce((sum: number, r: any) => sum + r.amount, 0) || 0;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#000" }}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20 }}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.accent}
+          />
         }
+        showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={{ marginBottom: 24 }}>
-          <Text style={{ color: "#fff", fontSize: 32, fontWeight: "bold" }}>Récompenses</Text>
-          <Text style={{ color: "#666", fontSize: 16, marginTop: 4 }}>
-            Tes gains et codes promo exclusifs
-          </Text>
-        </View>
+        <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.header}>
+          <Text style={styles.headerTitle}>Gains</Text>
+        </Animated.View>
 
-        {/* Stats Cards */}
-        <View style={{ flexDirection: "row", gap: 12, marginBottom: 32 }}>
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "#1A1A1A",
-              borderRadius: 20,
-              padding: 20,
-            }}
-          >
-            <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 14,
-                backgroundColor: "#22c55e",
-                justifyContent: "center",
-                alignItems: "center",
-                marginBottom: 12,
-              }}
-            >
-              <Ionicons name="gift" size={24} color="#fff" />
-            </View>
-            <Text style={{ color: "#fff", fontSize: 28, fontWeight: "bold" }}>
-              {promoCodes?.length || 0}
-            </Text>
-            <Text style={{ color: "#666", fontSize: 14 }}>Codes promo</Text>
-          </View>
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "#1A1A1A",
-              borderRadius: 20,
-              padding: 20,
-            }}
-          >
-            <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 14,
-                backgroundColor: "#fff",
-                justifyContent: "center",
-                alignItems: "center",
-                marginBottom: 12,
-              }}
-            >
-              <Ionicons name="wallet" size={24} color="#000" />
-            </View>
-            <Text style={{ color: "#fff", fontSize: 28, fontWeight: "bold" }}>
-              {totalSaved.toFixed(0)}€
-            </Text>
-            <Text style={{ color: "#666", fontSize: 14 }}>Gagnés</Text>
-          </View>
-        </View>
+        {/* Total */}
+        <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.totalCard}>
+          <Text style={styles.totalLabel}>Total gagné</Text>
+          <Text style={styles.totalAmount}>{totalEarned.toFixed(0)}€</Text>
+        </Animated.View>
 
         {/* Promo Codes */}
         {promoCodes && promoCodes.length > 0 && (
-          <View style={{ marginBottom: 32 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
-              <View
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: "#22c55e",
-                  marginRight: 8,
-                }}
-              />
-              <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}>
-                Tes codes promo
-              </Text>
-            </View>
-
-            {promoCodes.map((promo, index) => (
-              <TouchableOpacity
-                key={index}
-                onPress={() => copyCode(promo.code!)}
-                style={{
-                  backgroundColor: "#1A1A1A",
-                  borderRadius: 20,
-                  padding: 20,
-                  marginBottom: 12,
-                  borderWidth: 1,
-                  borderColor: "#22c55e",
-                }}
-              >
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-                    <View
-                      style={{
-                        width: 56,
-                        height: 56,
-                        borderRadius: 16,
-                        backgroundColor: "#2A2A2A",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        marginRight: 16,
-                      }}
-                    >
-                      <Text style={{ fontSize: 28 }}>🎁</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: "#666", fontSize: 12, marginBottom: 2 }}>
-                        {promo.sponsor}
-                      </Text>
-                      <Text style={{ color: "#fff", fontSize: 18, fontWeight: "bold" }}>
-                        {promo.code}
-                      </Text>
-                      <Text style={{ color: "#22c55e", fontSize: 12, marginTop: 4 }}>
-                        Tap pour copier
-                      </Text>
-                    </View>
+          <Animated.View entering={FadeInDown.delay(150).springify()} style={styles.section}>
+            <Text style={styles.sectionTitle}>Codes promo</Text>
+            <View style={styles.codesList}>
+              {promoCodes.map((promo: any, index: number) => (
+                <TouchableOpacity
+                  key={index}
+                  onPress={() => promo.code && shareCode(promo.code)}
+                  style={styles.codeCard}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.codeMain}>
+                    <Text style={styles.codeSponsor}>{promo.sponsor}</Text>
+                    <Text style={styles.codeValue}>{promo.code}</Text>
                   </View>
-                  <Ionicons name="copy-outline" size={24} color="#666" />
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+                  <Ionicons name="share-outline" size={20} color={Colors.textTertiary} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Animated.View>
         )}
 
-        {/* Rewards History */}
-        <View style={{ marginBottom: 120 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
-            <Ionicons name="trophy" size={20} color="#fff" style={{ marginRight: 8 }} />
-            <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}>
-              Historique des gains
-            </Text>
-          </View>
+        {/* History */}
+        <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.section}>
+          <Text style={styles.sectionTitle}>Historique</Text>
 
           {rewards === undefined ? (
-            <ActivityIndicator color="#fff" style={{ marginTop: 20 }} />
+            <View style={styles.loadingSection}>
+              <ActivityIndicator color={Colors.accent} />
+            </View>
           ) : rewards.length === 0 ? (
-            <View
-              style={{
-                backgroundColor: "#1A1A1A",
-                borderRadius: 20,
-                padding: 24,
-                alignItems: "center",
-              }}
-            >
-              <Text style={{ fontSize: 40, marginBottom: 12 }}>🏆</Text>
-              <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
-                Pas encore de gains
-              </Text>
-              <Text style={{ color: "#666", fontSize: 14, textAlign: "center", marginTop: 4 }}>
-                Gagne un défi pour débloquer des récompenses !
-              </Text>
+            <View style={styles.emptyState}>
+              <Ionicons name="trophy-outline" size={32} color={Colors.textTertiary} />
+              <Text style={styles.emptyText}>Pas encore de gains</Text>
             </View>
           ) : (
-            rewards.map((reward) => (
-              <View
-                key={reward._id}
-                style={{
-                  backgroundColor: "#1A1A1A",
-                  borderRadius: 16,
-                  padding: 16,
-                  marginBottom: 12,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <View
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 12,
-                      backgroundColor: "#22c55e",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      marginRight: 12,
-                    }}
-                  >
-                    <Text style={{ fontSize: 18 }}>💰</Text>
-                  </View>
-                  <View>
-                    <Text style={{ color: "#fff", fontWeight: "600" }}>
-                      {reward.challenge?.title || "Défi"}
+            <View style={styles.rewardsList}>
+              {rewards.map((reward: any) => (
+                <View key={reward._id} style={styles.rewardCard}>
+                  <View style={styles.rewardMain}>
+                    <Text style={styles.rewardTitle}>
+                      {reward.challenge?.title || "Pact"}
                     </Text>
-                    <Text style={{ color: "#666", fontSize: 12 }}>
+                    <Text style={styles.rewardDate}>
                       {new Date(reward.createdAt).toLocaleDateString("fr-FR")}
                     </Text>
                   </View>
+                  <Text style={styles.rewardAmount}>+{reward.amount.toFixed(0)}€</Text>
                 </View>
-                <Text style={{ color: "#22c55e", fontSize: 18, fontWeight: "bold" }}>
-                  +{reward.amount.toFixed(2)}€
-                </Text>
-              </View>
-            ))
+              ))}
+            </View>
           )}
-        </View>
+        </Animated.View>
+
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.lg,
+  },
+  header: {
+    marginBottom: Spacing.xl,
+  },
+  headerTitle: {
+    ...Typography.headlineLarge,
+    color: Colors.textPrimary,
+  },
+  totalCard: {
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    alignItems: "center",
+    marginBottom: Spacing.xxl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  totalLabel: {
+    ...Typography.labelSmall,
+    color: Colors.textTertiary,
+    marginBottom: Spacing.xs,
+  },
+  totalAmount: {
+    fontSize: 40,
+    fontWeight: "700",
+    color: Colors.success,
+  },
+  section: {
+    marginBottom: Spacing.xxl,
+  },
+  sectionTitle: {
+    ...Typography.labelMedium,
+    color: Colors.textTertiary,
+    marginBottom: Spacing.md,
+  },
+  loadingSection: {
+    padding: Spacing.xxl,
+    alignItems: "center",
+  },
+  codesList: {
+    gap: Spacing.sm,
+  },
+  codeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.success,
+  },
+  codeMain: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  codeSponsor: {
+    ...Typography.bodySmall,
+    color: Colors.textTertiary,
+  },
+  codeValue: {
+    ...Typography.headlineSmall,
+    color: Colors.textPrimary,
+    letterSpacing: 2,
+  },
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: Spacing.xxl,
+    gap: Spacing.md,
+  },
+  emptyText: {
+    ...Typography.bodyMedium,
+    color: Colors.textTertiary,
+  },
+  rewardsList: {
+    gap: Spacing.sm,
+  },
+  rewardCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  rewardMain: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  rewardTitle: {
+    ...Typography.labelMedium,
+    color: Colors.textPrimary,
+  },
+  rewardDate: {
+    ...Typography.bodySmall,
+    color: Colors.textTertiary,
+  },
+  rewardAmount: {
+    ...Typography.headlineSmall,
+    color: Colors.success,
+  },
+  bottomSpacer: {
+    height: 120,
+  },
+});

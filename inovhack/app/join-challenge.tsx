@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  Alert,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,6 +16,13 @@ import { api } from "../convex/_generated/api";
 import { useAuth } from "../providers/AuthProvider";
 import { router, useLocalSearchParams } from "expo-router";
 import { Id } from "../convex/_generated/dataModel";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import {
+  Colors,
+  Spacing,
+  BorderRadius,
+  Typography,
+} from "../constants/theme";
 
 export default function JoinChallengeScreen() {
   const { challengeId } = useLocalSearchParams<{ challengeId: string }>();
@@ -40,27 +49,25 @@ export default function JoinChallengeScreen() {
 
   const [betAmount, setBetAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
 
   const handleJoin = async () => {
     if (!userId || !challengeId) {
-      setError("Erreur de connexion");
+      Alert.alert("Erreur", "Connexion requise");
       return;
     }
 
     const amount = parseInt(betAmount);
     if (!amount || amount < (challenge?.minBet || 0)) {
-      setError(`Mise minimum: ${challenge?.minBet}€`);
+      Alert.alert("Erreur", `Mise minimum: ${challenge?.minBet}€`);
       return;
     }
 
     if (user && amount > user.balance) {
-      setError("Solde insuffisant");
+      Alert.alert("Erreur", "Solde insuffisant");
       return;
     }
 
     setIsSubmitting(true);
-    setError("");
 
     try {
       await joinChallenge({
@@ -68,11 +75,9 @@ export default function JoinChallengeScreen() {
         userId,
         betAmount: amount,
       });
-
       router.back();
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Erreur lors de l'inscription");
+      Alert.alert("Erreur", err.message || "Erreur");
     } finally {
       setIsSubmitting(false);
     }
@@ -80,213 +85,282 @@ export default function JoinChallengeScreen() {
 
   if (!challenge) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#fff" />
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
       </SafeAreaView>
     );
   }
 
   const alreadyJoined = !!participation;
+  const quickAmounts = [challenge.minBet, challenge.minBet * 2, challenge.minBet * 5];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#000" }}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header */}
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 24 }}>
-          <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 16 }}>
-            <Ionicons name="close" size={28} color="#fff" />
+        <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
+            <Ionicons name="close" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={{ color: "#fff", fontSize: 24, fontWeight: "bold" }}>
-            Rejoindre le défi
-          </Text>
-        </View>
+          <Text style={styles.headerTitle}>Rejoindre</Text>
+        </Animated.View>
 
-        {/* Challenge Card */}
-        <View
-          style={{
-            backgroundColor: "#1A1A1A",
-            borderRadius: 20,
-            padding: 24,
-            marginBottom: 24,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 16 }}>
-            <View
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 16,
-                backgroundColor: "#2A2A2A",
-                justifyContent: "center",
-                alignItems: "center",
-                marginRight: 16,
-              }}
-            >
-              <Text style={{ fontSize: 28 }}>
-                {challenge.category === "sport" ? "🏋️" :
-                 challenge.category === "screen_time" ? "📱" :
-                 challenge.category === "procrastination" ? "💼" :
-                 challenge.category === "social" ? "💬" : "🎯"}
-              </Text>
+        {/* Challenge Info */}
+        <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.challengeCard}>
+          <Text style={styles.challengeTitle}>{challenge.title}</Text>
+          <Text style={styles.challengeGoal}>{challenge.goal}</Text>
+
+          <View style={styles.statsRow}>
+            <View style={styles.stat}>
+              <Text style={styles.statValue}>{pot?.participantCount || 0}</Text>
+              <Text style={styles.statLabel}>participants</Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}>
-                {challenge.title}
-              </Text>
-              <Text style={{ color: "#666", fontSize: 14, marginTop: 4 }}>
-                {challenge.description}
-              </Text>
+            <View style={styles.statDivider} />
+            <View style={styles.stat}>
+              <Text style={[styles.statValue, { color: Colors.success }]}>{pot?.total || 0}€</Text>
+              <Text style={styles.statLabel}>pot total</Text>
             </View>
           </View>
-
-          <View style={{ backgroundColor: "#2A2A2A", height: 1, marginVertical: 16 }} />
-
-          <View style={{ gap: 12 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ color: "#666" }}>Objectif</Text>
-              <Text style={{ color: "#fff", fontWeight: "600" }}>{challenge.goal}</Text>
-            </View>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ color: "#666" }}>Preuve requise</Text>
-              <Text style={{ color: "#fff", fontWeight: "600" }}>{challenge.proofType}</Text>
-            </View>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ color: "#666" }}>Mise minimum</Text>
-              <Text style={{ color: "#fff", fontWeight: "600" }}>{challenge.minBet}€</Text>
-            </View>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ color: "#666" }}>Participants</Text>
-              <Text style={{ color: "#22c55e", fontWeight: "600" }}>{pot?.participantCount || 0}</Text>
-            </View>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ color: "#666" }}>Pot total</Text>
-              <Text style={{ color: "#22c55e", fontWeight: "600" }}>{pot?.total || 0}€</Text>
-            </View>
-          </View>
-
-          {challenge.sponsorName && (
-            <>
-              <View style={{ backgroundColor: "#2A2A2A", height: 1, marginVertical: 16 }} />
-              <View
-                style={{
-                  backgroundColor: "#2A2A2A",
-                  padding: 16,
-                  borderRadius: 12,
-                  flexDirection: "row",
-                  alignItems: "center",
-                }}
-              >
-                <Text style={{ fontSize: 24, marginRight: 12 }}>🎁</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: "#fff", fontWeight: "600" }}>
-                    Sponsor: {challenge.sponsorName}
-                  </Text>
-                  <Text style={{ color: "#22c55e", fontSize: 13 }}>
-                    {challenge.sponsorDiscount}
-                  </Text>
-                </View>
-              </View>
-            </>
-          )}
-        </View>
+        </Animated.View>
 
         {alreadyJoined ? (
-          <View
-            style={{
-              backgroundColor: "#22c55e",
-              borderRadius: 12,
-              padding: 18,
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ color: "#fff", fontSize: 16, fontWeight: "bold" }}>
-              Tu participes déjà à ce défi !
-            </Text>
-          </View>
+          <Animated.View entering={FadeInDown.delay(150).springify()} style={styles.joinedCard}>
+            <Ionicons name="checkmark-circle" size={40} color={Colors.success} />
+            <Text style={styles.joinedText}>Tu participes déjà</Text>
+          </Animated.View>
         ) : (
           <>
-            {/* Bet Amount */}
-            <View style={{ marginBottom: 20 }}>
-              <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600", marginBottom: 8 }}>
-                Ta mise (€)
-              </Text>
-              <TextInput
-                style={{
-                  backgroundColor: "#1A1A1A",
-                  borderRadius: 12,
-                  padding: 16,
-                  color: "#fff",
-                  fontSize: 24,
-                  fontWeight: "bold",
-                  textAlign: "center",
-                }}
-                placeholder={`Min ${challenge.minBet}€`}
-                placeholderTextColor="#666"
-                value={betAmount}
-                onChangeText={setBetAmount}
-                keyboardType="numeric"
-              />
-              <Text style={{ color: "#666", fontSize: 12, textAlign: "center", marginTop: 8 }}>
-                Ton solde: {user?.balance.toFixed(2)}€
-              </Text>
-            </View>
+            {/* Bet Input */}
+            <Animated.View entering={FadeInDown.delay(150).springify()} style={styles.betSection}>
+              <Text style={styles.inputLabel}>TA MISE</Text>
+              <View style={styles.betInputContainer}>
+                <Text style={styles.betCurrency}>€</Text>
+                <TextInput
+                  style={styles.betInput}
+                  placeholder={challenge.minBet.toString()}
+                  placeholderTextColor={Colors.textTertiary}
+                  value={betAmount}
+                  onChangeText={setBetAmount}
+                  keyboardType="numeric"
+                />
+              </View>
+              <Text style={styles.balanceText}>Solde: {user?.balance.toFixed(0)}€</Text>
+            </Animated.View>
 
-            {/* Quick amounts */}
-            <View style={{ flexDirection: "row", gap: 10, marginBottom: 20 }}>
-              {[challenge.minBet, challenge.minBet * 2, challenge.minBet * 5].map((amount) => (
+            {/* Quick Amounts */}
+            <Animated.View entering={FadeInDown.delay(180).springify()} style={styles.quickAmounts}>
+              {quickAmounts.map((amount) => (
                 <TouchableOpacity
                   key={amount}
                   onPress={() => setBetAmount(amount.toString())}
-                  style={{
-                    flex: 1,
-                    backgroundColor: betAmount === amount.toString() ? "#fff" : "#1A1A1A",
-                    padding: 12,
-                    borderRadius: 12,
-                    alignItems: "center",
-                  }}
+                  style={[
+                    styles.quickAmountButton,
+                    betAmount === amount.toString() && styles.quickAmountButtonSelected,
+                  ]}
                 >
                   <Text
-                    style={{
-                      color: betAmount === amount.toString() ? "#000" : "#fff",
-                      fontWeight: "600",
-                    }}
+                    style={[
+                      styles.quickAmountText,
+                      betAmount === amount.toString() && styles.quickAmountTextSelected,
+                    ]}
                   >
                     {amount}€
                   </Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </Animated.View>
 
-            {/* Error */}
-            {error ? (
-              <Text style={{ color: "#ef4444", textAlign: "center", marginBottom: 16 }}>
-                {error}
-              </Text>
-            ) : null}
-
-            {/* Join Button */}
-            <TouchableOpacity
-              onPress={handleJoin}
-              disabled={isSubmitting}
-              style={{
-                backgroundColor: "#fff",
-                borderRadius: 12,
-                padding: 18,
-                alignItems: "center",
-                opacity: isSubmitting ? 0.7 : 1,
-              }}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color="#000" />
-              ) : (
-                <Text style={{ color: "#000", fontSize: 16, fontWeight: "bold" }}>
-                  Rejoindre et miser {betAmount || challenge.minBet}€
-                </Text>
-              )}
-            </TouchableOpacity>
+            {/* Submit */}
+            <Animated.View entering={FadeInDown.delay(200).springify()}>
+              <TouchableOpacity
+                onPress={handleJoin}
+                disabled={isSubmitting}
+                style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color={Colors.black} />
+                ) : (
+                  <Text style={styles.submitButtonText}>
+                    Miser {betAmount || challenge.minBet}€
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </Animated.View>
           </>
         )}
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.huge,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    marginBottom: Spacing.xxl,
+  },
+  closeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.surfaceElevated,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  headerTitle: {
+    ...Typography.headlineLarge,
+    color: Colors.textPrimary,
+  },
+  challengeCard: {
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    marginBottom: Spacing.xl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  challengeTitle: {
+    ...Typography.headlineMedium,
+    color: Colors.textPrimary,
+    marginBottom: Spacing.xs,
+  },
+  challengeGoal: {
+    ...Typography.bodyMedium,
+    color: Colors.textTertiary,
+    marginBottom: Spacing.xl,
+  },
+  statsRow: {
+    flexDirection: "row",
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+  },
+  stat: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statValue: {
+    ...Typography.headlineMedium,
+    color: Colors.textPrimary,
+  },
+  statLabel: {
+    ...Typography.bodySmall,
+    color: Colors.textTertiary,
+    marginTop: Spacing.xs,
+  },
+  statDivider: {
+    width: 1,
+    backgroundColor: Colors.border,
+  },
+  joinedCard: {
+    alignItems: "center",
+    paddingVertical: Spacing.xxxl,
+    gap: Spacing.md,
+  },
+  joinedText: {
+    ...Typography.headlineSmall,
+    color: Colors.success,
+  },
+  betSection: {
+    marginBottom: Spacing.xl,
+  },
+  inputLabel: {
+    ...Typography.labelSmall,
+    color: Colors.textTertiary,
+    marginBottom: Spacing.sm,
+    letterSpacing: 1,
+  },
+  betInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.xl,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  betCurrency: {
+    ...Typography.headlineLarge,
+    color: Colors.textTertiary,
+    marginRight: Spacing.md,
+  },
+  betInput: {
+    flex: 1,
+    ...Typography.headlineLarge,
+    color: Colors.textPrimary,
+    padding: 0,
+    textAlign: "center",
+  },
+  balanceText: {
+    ...Typography.bodySmall,
+    color: Colors.textTertiary,
+    textAlign: "center",
+    marginTop: Spacing.md,
+  },
+  quickAmounts: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginBottom: Spacing.xl,
+  },
+  quickAmountButton: {
+    flex: 1,
+    backgroundColor: Colors.surfaceElevated,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  quickAmountButtonSelected: {
+    backgroundColor: Colors.textPrimary,
+    borderColor: Colors.textPrimary,
+  },
+  quickAmountText: {
+    ...Typography.labelMedium,
+    color: Colors.textSecondary,
+  },
+  quickAmountTextSelected: {
+    color: Colors.black,
+  },
+  submitButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.textPrimary,
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.xl,
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
+  },
+  submitButtonText: {
+    ...Typography.labelLarge,
+    color: Colors.black,
+  },
+});

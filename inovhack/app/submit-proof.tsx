@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,18 +6,35 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  Alert,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery, useAction } from "convex/react";
 import { api } from "../convex/_generated/api";
-import { useAuth } from "../providers/AuthProvider";
 import { router, useLocalSearchParams } from "expo-router";
 import { Id } from "../convex/_generated/dataModel";
+import Animated, {
+  FadeInDown,
+  FadeIn,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
+import {
+  Colors,
+  Spacing,
+  BorderRadius,
+  Typography,
+} from "../constants/theme";
+
+type ValidationState = "idle" | "validating" | "approved" | "rejected";
 
 export default function SubmitProofScreen() {
   const { participationId } = useLocalSearchParams<{ participationId: string }>();
-  const { userId } = useAuth();
 
   const participation = useQuery(
     api.proofs.getParticipationForProof,
@@ -38,23 +55,37 @@ export default function SubmitProofScreen() {
 
   const [proofContent, setProofContent] = useState("");
   const [proofValue, setProofValue] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [result, setResult] = useState<{ approved: boolean; comment: string } | null>(null);
+  const [validationState, setValidationState] = useState<ValidationState>("idle");
+  const [validationResult, setValidationResult] = useState<{ approved: boolean; comment: string } | null>(null);
+
+  const rotation = useSharedValue(0);
+
+  useEffect(() => {
+    if (validationState === "validating") {
+      rotation.value = withRepeat(
+        withTiming(360, { duration: 1500, easing: Easing.linear }),
+        -1,
+        false
+      );
+    }
+  }, [validationState]);
+
+  const spinnerStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
 
   const handleSubmit = async () => {
     if (!participationId) {
-      setError("Erreur de participation");
+      Alert.alert("Erreur", "Erreur de participation");
       return;
     }
 
     if (!proofContent.trim() && !proofValue) {
-      setError("Fournis une preuve");
+      Alert.alert("Erreur", "Fournis une preuve");
       return;
     }
 
-    setIsSubmitting(true);
-    setError("");
+    setValidationState("validating");
 
     try {
       const res = await submitProof({
@@ -63,224 +94,308 @@ export default function SubmitProofScreen() {
         proofValue: proofValue ? parseInt(proofValue) : undefined,
       });
 
-      setResult(res.validation);
+      setValidationResult(res.validation);
+      setValidationState(res.validation.approved ? "approved" : "rejected");
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Erreur lors de la soumission");
-    } finally {
-      setIsSubmitting(false);
+      setValidationState("idle");
+      Alert.alert("Erreur", err.message || "Erreur");
     }
   };
 
   if (!challenge || !participation) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#fff" />
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={Colors.accent} />
+        </View>
       </SafeAreaView>
     );
   }
 
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#000" }}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
-        {/* Header */}
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 24 }}>
-          <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 16 }}>
-            <Ionicons name="close" size={28} color="#fff" />
-          </TouchableOpacity>
-          <Text style={{ color: "#fff", fontSize: 24, fontWeight: "bold" }}>
-            Soumettre une preuve
-          </Text>
+  // Validating State
+  if (validationState === "validating") {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <Animated.View style={[styles.spinner, spinnerStyle]}>
+            <View style={styles.spinnerInner} />
+          </Animated.View>
+          <Text style={styles.validatingTitle}>Validation en cours</Text>
+          <Text style={styles.validatingSubtitle}>L'IA analyse ta preuve...</Text>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Result State
+  if (validationState === "approved" || validationState === "rejected") {
+    const isApproved = validationResult?.approved;
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <Ionicons
+            name={isApproved ? "checkmark-circle" : "close-circle"}
+            size={64}
+            color={isApproved ? Colors.success : Colors.danger}
+          />
+          <Text style={[styles.resultTitle, { color: isApproved ? Colors.success : Colors.danger }]}>
+            {isApproved ? "Validé" : "Rejeté"}
+          </Text>
+          <Text style={styles.resultComment}>{validationResult?.comment}</Text>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButtonLarge}>
+            <Text style={styles.backButtonText}>Retour</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Existing Proof State
+  if (existingProof) {
+    const isApproved = existingProof.aiValidation === "approved";
+    const isPending = existingProof.aiValidation === "pending";
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <Ionicons
+            name={isApproved ? "checkmark-circle" : isPending ? "time" : "close-circle"}
+            size={64}
+            color={isApproved ? Colors.success : isPending ? Colors.warning : Colors.danger}
+          />
+          <Text style={[styles.resultTitle, { color: isApproved ? Colors.success : isPending ? Colors.warning : Colors.danger }]}>
+            {isApproved ? "Validé" : isPending ? "En attente" : "Rejeté"}
+          </Text>
+          <Text style={styles.resultComment}>{existingProof.aiComment}</Text>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButtonLarge}>
+            <Text style={styles.backButtonText}>Retour</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Form State
+  return (
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header */}
+        <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.closeButton}>
+            <Ionicons name="close" size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Soumettre</Text>
+        </Animated.View>
 
         {/* Challenge Info */}
-        <View
-          style={{
-            backgroundColor: "#1A1A1A",
-            borderRadius: 20,
-            padding: 20,
-            marginBottom: 24,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 12 }}>
-            <View
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 16,
-                backgroundColor: "#2A2A2A",
-                justifyContent: "center",
-                alignItems: "center",
-                marginRight: 12,
-              }}
-            >
-              <Text style={{ fontSize: 24 }}>
-                {challenge.category === "sport" ? "🏋️" :
-                 challenge.category === "screen_time" ? "📱" :
-                 challenge.category === "procrastination" ? "💼" :
-                 challenge.category === "social" ? "💬" : "🎯"}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: "#fff", fontSize: 18, fontWeight: "bold" }}>
-                {challenge.title}
-              </Text>
-              <Text style={{ color: "#666", fontSize: 14 }}>
-                {challenge.goal}
-              </Text>
-            </View>
-          </View>
+        <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.challengeCard}>
+          <Text style={styles.challengeTitle}>{challenge.title}</Text>
+          <Text style={styles.challengeGoal}>{challenge.goal}</Text>
+        </Animated.View>
 
-          <View style={{ backgroundColor: "#2A2A2A", borderRadius: 12, padding: 16 }}>
-            <Text style={{ color: "#666", fontSize: 12, marginBottom: 4 }}>Preuve requise</Text>
-            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>
-              {challenge.proofDescription}
-            </Text>
-          </View>
-        </View>
-
-        {/* Already submitted */}
-        {existingProof ? (
-          <View
-            style={{
-              backgroundColor: existingProof.aiValidation === "approved" ? "#22c55e" :
-                             existingProof.aiValidation === "rejected" ? "#ef4444" : "#f59e0b",
-              borderRadius: 20,
-              padding: 24,
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ fontSize: 48, marginBottom: 12 }}>
-              {existingProof.aiValidation === "approved" ? "✅" :
-               existingProof.aiValidation === "rejected" ? "❌" : "⏳"}
-            </Text>
-            <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold", marginBottom: 8 }}>
-              {existingProof.aiValidation === "approved" ? "Preuve validée !" :
-               existingProof.aiValidation === "rejected" ? "Preuve rejetée" : "En attente"}
-            </Text>
-            <Text style={{ color: "#fff", opacity: 0.9, textAlign: "center" }}>
-              {existingProof.aiComment}
-            </Text>
-          </View>
-        ) : result ? (
-          /* Result after submission */
-          <View
-            style={{
-              backgroundColor: result.approved ? "#22c55e" : "#ef4444",
-              borderRadius: 20,
-              padding: 24,
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ fontSize: 48, marginBottom: 12 }}>
-              {result.approved ? "🎉" : "😔"}
-            </Text>
-            <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold", marginBottom: 8 }}>
-              {result.approved ? "Bravo !" : "Dommage..."}
-            </Text>
-            <Text style={{ color: "#fff", opacity: 0.9, textAlign: "center" }}>
-              {result.comment}
-            </Text>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={{
-                backgroundColor: "#fff",
-                paddingHorizontal: 24,
-                paddingVertical: 12,
-                borderRadius: 12,
-                marginTop: 20,
-              }}
-            >
-              <Text style={{ color: "#000", fontWeight: "bold" }}>Retour</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            {/* Proof Value Input */}
-            {challenge.goalValue && (
-              <View style={{ marginBottom: 20 }}>
-                <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600", marginBottom: 8 }}>
-                  Valeur atteinte ({challenge.goalUnit})
-                </Text>
-                <TextInput
-                  style={{
-                    backgroundColor: "#1A1A1A",
-                    borderRadius: 12,
-                    padding: 16,
-                    color: "#fff",
-                    fontSize: 24,
-                    fontWeight: "bold",
-                    textAlign: "center",
-                  }}
-                  placeholder={`Objectif: ${challenge.goalValue}`}
-                  placeholderTextColor="#666"
-                  value={proofValue}
-                  onChangeText={setProofValue}
-                  keyboardType="numeric"
-                />
-                <Text style={{ color: "#666", fontSize: 12, textAlign: "center", marginTop: 8 }}>
-                  Objectif à atteindre: {challenge.goalValue} {challenge.goalUnit}
-                </Text>
-              </View>
-            )}
-
-            {/* Proof Content */}
-            <View style={{ marginBottom: 20 }}>
-              <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600", marginBottom: 8 }}>
-                Description de ta preuve
-              </Text>
+        {/* Value Input */}
+        {challenge.goalValue && (
+          <Animated.View entering={FadeInDown.delay(150).springify()} style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>VALEUR ({challenge.goalUnit})</Text>
+            <View style={styles.valueInputContainer}>
               <TextInput
-                style={{
-                  backgroundColor: "#1A1A1A",
-                  borderRadius: 12,
-                  padding: 16,
-                  color: "#fff",
-                  fontSize: 16,
-                  minHeight: 100,
-                }}
-                placeholder="Décris ta preuve ou colle un lien vers ton screenshot..."
-                placeholderTextColor="#666"
-                value={proofContent}
-                onChangeText={setProofContent}
-                multiline
+                style={styles.valueInput}
+                placeholder={challenge.goalValue.toString()}
+                placeholderTextColor={Colors.textTertiary}
+                value={proofValue}
+                onChangeText={setProofValue}
+                keyboardType="numeric"
               />
+              <Text style={styles.valueUnit}>{challenge.goalUnit}</Text>
             </View>
-
-            {/* Error */}
-            {error ? (
-              <Text style={{ color: "#ef4444", textAlign: "center", marginBottom: 16 }}>
-                {error}
-              </Text>
-            ) : null}
-
-            {/* Submit Button */}
-            <TouchableOpacity
-              onPress={handleSubmit}
-              disabled={isSubmitting}
-              style={{
-                backgroundColor: "#fff",
-                borderRadius: 12,
-                padding: 18,
-                alignItems: "center",
-                opacity: isSubmitting ? 0.7 : 1,
-              }}
-            >
-              {isSubmitting ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <ActivityIndicator color="#000" />
-                  <Text style={{ color: "#000", fontSize: 16, fontWeight: "bold" }}>
-                    Validation par l'IA...
-                  </Text>
-                </View>
-              ) : (
-                <Text style={{ color: "#000", fontSize: 16, fontWeight: "bold" }}>
-                  Soumettre ma preuve
-                </Text>
-              )}
-            </TouchableOpacity>
-          </>
+          </Animated.View>
         )}
+
+        {/* Description */}
+        <Animated.View entering={FadeInDown.delay(180).springify()} style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>DESCRIPTION</Text>
+          <TextInput
+            style={styles.textInput}
+            placeholder="Décris ta preuve..."
+            placeholderTextColor={Colors.textTertiary}
+            value={proofContent}
+            onChangeText={setProofContent}
+            multiline
+            numberOfLines={4}
+          />
+        </Animated.View>
+
+        {/* Submit */}
+        <Animated.View entering={FadeInDown.delay(200).springify()}>
+          <TouchableOpacity onPress={handleSubmit} style={styles.submitButton}>
+            <Text style={styles.submitButtonText}>Soumettre</Text>
+          </TouchableOpacity>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.lg,
+  },
+  spinner: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 3,
+    borderColor: Colors.info,
+    borderTopColor: "transparent",
+    marginBottom: Spacing.lg,
+  },
+  spinnerInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.info,
+    position: "absolute",
+    top: -4,
+    left: "50%",
+    marginLeft: -4,
+  },
+  validatingTitle: {
+    ...Typography.headlineMedium,
+    color: Colors.textPrimary,
+  },
+  validatingSubtitle: {
+    ...Typography.bodyMedium,
+    color: Colors.textTertiary,
+  },
+  resultTitle: {
+    ...Typography.headlineLarge,
+  },
+  resultComment: {
+    ...Typography.bodyMedium,
+    color: Colors.textTertiary,
+    textAlign: "center",
+  },
+  backButtonLarge: {
+    backgroundColor: Colors.surfaceElevated,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xxl,
+    borderRadius: BorderRadius.lg,
+    marginTop: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  backButtonText: {
+    ...Typography.labelMedium,
+    color: Colors.textPrimary,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.huge,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    marginBottom: Spacing.xxl,
+  },
+  closeButton: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.surfaceElevated,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  headerTitle: {
+    ...Typography.headlineLarge,
+    color: Colors.textPrimary,
+  },
+  challengeCard: {
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    marginBottom: Spacing.xl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  challengeTitle: {
+    ...Typography.headlineSmall,
+    color: Colors.textPrimary,
+    marginBottom: Spacing.xs,
+  },
+  challengeGoal: {
+    ...Typography.bodyMedium,
+    color: Colors.textTertiary,
+  },
+  inputGroup: {
+    marginBottom: Spacing.xl,
+  },
+  inputLabel: {
+    ...Typography.labelSmall,
+    color: Colors.textTertiary,
+    marginBottom: Spacing.sm,
+    letterSpacing: 1,
+  },
+  valueInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  valueInput: {
+    flex: 1,
+    ...Typography.headlineLarge,
+    color: Colors.textPrimary,
+    padding: 0,
+    textAlign: "center",
+  },
+  valueUnit: {
+    ...Typography.labelLarge,
+    color: Colors.textTertiary,
+    marginLeft: Spacing.md,
+  },
+  textInput: {
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
+    ...Typography.bodyMedium,
+    color: Colors.textPrimary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    minHeight: 100,
+    textAlignVertical: "top",
+  },
+  submitButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.textPrimary,
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+  },
+  submitButtonText: {
+    ...Typography.labelLarge,
+    color: Colors.black,
+  },
+});

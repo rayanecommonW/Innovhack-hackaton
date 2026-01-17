@@ -4,92 +4,88 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
   ActivityIndicator,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../providers/AuthProvider";
-import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import { useAuth } from "../providers/AuthProvider";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import {
+  Colors,
+  Spacing,
+  BorderRadius,
+  Typography,
+} from "../constants/theme";
 
 export default function AuthScreen() {
-  const [isLogin, setIsLogin] = useState(true);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState("");
-
   const { login, signup } = useAuth();
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    setError("");
-
     if (!email.trim()) {
-      setError("Email requis");
-      return;
-    }
-
-    if (!password.trim() || password.length < 4) {
-      setError("Mot de passe requis (min 4 caractères)");
+      Alert.alert("Erreur", "Entre ton email");
       return;
     }
 
     if (!isLogin && !name.trim()) {
-      setError("Nom requis");
+      Alert.alert("Erreur", "Entre ton nom");
       return;
     }
 
-    setIsSubmitting(true);
-
+    setLoading(true);
     try {
-      let success: boolean;
-      if (isLogin) {
-        success = await login(email.trim().toLowerCase());
-      } else {
-        success = await signup(name.trim(), email.trim().toLowerCase());
-      }
+      const success = isLogin
+        ? await login(email.trim())
+        : await signup(name.trim(), email.trim());
 
       if (success) {
-        router.replace("/");
+        router.replace("/(tabs)/home");
       } else {
-        setError("Une erreur est survenue");
+        Alert.alert("Erreur", "Une erreur est survenue");
       }
-    } catch (err) {
-      setError("Une erreur est survenue");
+    } catch (error) {
+      Alert.alert("Erreur", "Connexion impossible");
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <View style={styles.content}>
-          {/* Logo/Header */}
-          <View style={styles.header}>
-            <Text style={styles.emoji}>🎯</Text>
-            <Text style={styles.title}>BetBuddy</Text>
-            <Text style={styles.subtitle}>
-              Parie avec tes amis, atteins tes objectifs
-            </Text>
-          </View>
+          {/* Back */}
+          <Animated.View entering={FadeInDown.delay(50).springify()}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Logo */}
+          <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.logoSection}>
+            <Text style={styles.logo}>PACT</Text>
+          </Animated.View>
 
           {/* Form */}
-          <View style={styles.form}>
+          <Animated.View entering={FadeInDown.delay(150).springify()} style={styles.form}>
             {!isLogin && (
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>Nom</Text>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>NOM</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="Ton nom"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={Colors.textTertiary}
                   value={name}
                   onChangeText={setName}
                   autoCapitalize="words"
@@ -97,80 +93,43 @@ export default function AuthScreen() {
               </View>
             )}
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email</Text>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>EMAIL</Text>
               <TextInput
                 style={styles.input}
                 placeholder="ton@email.com"
-                placeholderTextColor="#666"
+                placeholderTextColor={Colors.textTertiary}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                autoCorrect={false}
+                autoComplete="email"
               />
             </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Mot de passe</Text>
-              <View style={styles.passwordContainer}>
-                <TextInput
-                  style={styles.passwordInput}
-                  placeholder="••••••••"
-                  placeholderTextColor="#666"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeButton}
-                >
-                  <Ionicons
-                    name={showPassword ? "eye-off" : "eye"}
-                    size={22}
-                    color="#666"
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-
             <TouchableOpacity
-              style={[styles.button, isSubmitting && styles.buttonDisabled]}
               onPress={handleSubmit}
-              disabled={isSubmitting}
+              disabled={loading}
+              style={[styles.submitButton, loading && styles.submitButtonDisabled]}
             >
-              {isSubmitting ? (
-                <ActivityIndicator color="#000" />
+              {loading ? (
+                <ActivityIndicator color={Colors.black} />
               ) : (
-                <Text style={styles.buttonText}>
-                  {isLogin ? "Se connecter" : "Créer un compte"}
+                <Text style={styles.submitButtonText}>
+                  {isLogin ? "Connexion" : "Créer"}
                 </Text>
               )}
             </TouchableOpacity>
-          </View>
 
-          {/* Toggle */}
-          <TouchableOpacity
-            style={styles.toggle}
-            onPress={() => {
-              setIsLogin(!isLogin);
-              setError("");
-            }}
-          >
-            <Text style={styles.toggleText}>
-              {isLogin
-                ? "Pas encore de compte ? "
-                : "Déjà un compte ? "}
-              <Text style={styles.toggleTextBold}>
-                {isLogin ? "Créer un compte" : "Se connecter"}
+            <TouchableOpacity
+              onPress={() => setIsLogin(!isLogin)}
+              style={styles.toggleButton}
+            >
+              <Text style={styles.toggleText}>
+                {isLogin ? "Pas de compte ? Créer" : "Déjà un compte ? Connexion"}
               </Text>
-            </Text>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -180,102 +139,79 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000",
+    backgroundColor: Colors.background,
   },
   keyboardView: {
     flex: 1,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.lg,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.surfaceElevated,
     justifyContent: "center",
-  },
-  header: {
     alignItems: "center",
-    marginBottom: 48,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: Spacing.huge,
   },
-  emoji: {
-    fontSize: 64,
-    marginBottom: 16,
+  logoSection: {
+    alignItems: "center",
+    marginBottom: Spacing.huge,
   },
-  title: {
-    fontSize: 36,
-    fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
+  logo: {
+    fontSize: 48,
+    fontWeight: "800",
+    color: Colors.textPrimary,
+    letterSpacing: 10,
   },
   form: {
-    gap: 16,
+    gap: Spacing.lg,
   },
-  inputContainer: {
-    gap: 8,
+  inputGroup: {
+    gap: Spacing.sm,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#fff",
+  inputLabel: {
+    ...Typography.labelSmall,
+    color: Colors.textTertiary,
+    letterSpacing: 1,
   },
   input: {
-    backgroundColor: "#1A1A1A",
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: "#fff",
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.lg,
+    ...Typography.bodyMedium,
+    color: Colors.textPrimary,
     borderWidth: 1,
-    borderColor: "#2A2A2A",
+    borderColor: Colors.border,
   },
-  passwordContainer: {
-    flexDirection: "row",
+  submitButton: {
     alignItems: "center",
-    backgroundColor: "#1A1A1A",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#2A2A2A",
+    justifyContent: "center",
+    backgroundColor: Colors.textPrimary,
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    marginTop: Spacing.md,
   },
-  passwordInput: {
-    flex: 1,
-    padding: 16,
-    fontSize: 16,
-    color: "#fff",
-  },
-  eyeButton: {
-    paddingHorizontal: 16,
-  },
-  error: {
-    color: "#ef4444",
-    fontSize: 14,
-    textAlign: "center",
-  },
-  button: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  buttonDisabled: {
+  submitButtonDisabled: {
     opacity: 0.7,
   },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#000",
+  submitButtonText: {
+    ...Typography.labelLarge,
+    color: Colors.black,
   },
-  toggle: {
-    marginTop: 24,
+  toggleButton: {
     alignItems: "center",
+    paddingVertical: Spacing.md,
   },
   toggleText: {
-    fontSize: 14,
-    color: "#666",
-  },
-  toggleTextBold: {
-    color: "#fff",
-    fontWeight: "600",
+    ...Typography.bodyMedium,
+    color: Colors.textTertiary,
   },
 });

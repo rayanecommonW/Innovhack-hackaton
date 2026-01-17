@@ -2,243 +2,206 @@ import React from "react";
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  RefreshControl,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
 import { useAuth } from "../../providers/AuthProvider";
 import { router } from "expo-router";
+import Animated, {
+  FadeInDown,
+} from "react-native-reanimated";
+import {
+  Colors,
+  Spacing,
+  BorderRadius,
+  Typography,
+} from "../../constants/theme";
 
 export default function HomeScreen() {
-  const { user, userId, isLoading: authLoading } = useAuth();
-  const [refreshing, setRefreshing] = React.useState(false);
-
-  const participations = useQuery(
-    api.participations.getMyParticipations,
-    userId ? { userId } : "skip"
-  );
-
-  const onRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
-  }, []);
+  const { user, isLoading: authLoading } = useAuth();
 
   if (authLoading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#fff" />
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <Text style={styles.logo}>PACT</Text>
+          <ActivityIndicator size="small" color={Colors.accent} style={{ marginTop: Spacing.lg }} />
+        </View>
       </SafeAreaView>
     );
   }
 
   if (!user) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" }}>
-        <Text style={{ color: "#666", marginBottom: 16 }}>Non connecté</Text>
-        <TouchableOpacity
-          onPress={() => router.push("/auth")}
-          style={{ backgroundColor: "#fff", padding: 12, borderRadius: 8 }}
-        >
-          <Text style={{ color: "#000", fontWeight: "bold" }}>Se connecter</Text>
-        </TouchableOpacity>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <Text style={styles.logo}>PACT</Text>
+          <Text style={styles.tagline}>Engage. Parie. Gagne.</Text>
+          <TouchableOpacity
+            onPress={() => router.push("/auth")}
+            style={styles.authButton}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.authButtonText}>Commencer</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
 
-  const activeParticipations = participations?.filter((p) => p.status === "active") || [];
-  const weeklyGain = participations
-    ?.filter((p) => p.status === "won")
-    .reduce((sum, p) => sum + p.betAmount, 0) || 0;
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#000" }}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />
-        }
-      >
-        {/* Header */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
-          <View>
-            <Text style={{ color: "#666", fontSize: 14 }}>Bienvenue</Text>
-            <Text style={{ color: "#fff", fontSize: 28, fontWeight: "bold" }}>
-              {user.name} 🎯
-            </Text>
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <View style={styles.content}>
+        {/* Header minimal */}
+        <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.header}>
+          <Text style={styles.greeting}>{user.name}</Text>
+          <View style={styles.balanceChip}>
+            <Text style={styles.balanceText}>{user.balance.toFixed(0)}€</Text>
           </View>
-          <TouchableOpacity
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: "#1A1A1A",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Ionicons name="notifications-outline" size={22} color="#fff" />
-          </TouchableOpacity>
-        </View>
+        </Animated.View>
 
-        {/* Balance Card */}
-        <View
-          style={{
-            backgroundColor: "#1A1A1A",
-            borderRadius: 24,
-            padding: 24,
-            marginBottom: 24,
-          }}
-        >
-          <Text style={{ color: "#666", fontSize: 14, marginBottom: 8 }}>Ton solde</Text>
-          <Text style={{ color: "#fff", fontSize: 42, fontWeight: "bold" }}>
-            {user.balance.toFixed(2)}€
-          </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, gap: 12 }}>
-            {weeklyGain > 0 && (
-              <View style={{ backgroundColor: "#22c55e", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
-                <Text style={{ color: "#fff", fontSize: 12, fontWeight: "600" }}>
-                  +{weeklyGain.toFixed(2)}€ gagnés
-                </Text>
-              </View>
-            )}
-            <View style={{ backgroundColor: "#2A2A2A", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
-              <Text style={{ color: "#fff", fontSize: 12 }}>
-                {user.totalWins} victoires
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Active Bets Section */}
-        <View style={{ marginBottom: 24 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold" }}>
-              Défis en cours ({activeParticipations.length})
-            </Text>
-          </View>
-
-          {participations === undefined ? (
-            <ActivityIndicator color="#fff" />
-          ) : activeParticipations.length === 0 ? (
-            <View
-              style={{
-                backgroundColor: "#1A1A1A",
-                borderRadius: 20,
-                padding: 24,
-                alignItems: "center",
-              }}
-            >
-              <Text style={{ fontSize: 40, marginBottom: 12 }}>🎯</Text>
-              <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600", marginBottom: 4 }}>
-                Aucun défi en cours
-              </Text>
-              <Text style={{ color: "#666", fontSize: 14, textAlign: "center" }}>
-                Rejoins un défi dans l'onglet Explorer
-              </Text>
-            </View>
-          ) : (
-            activeParticipations.map((p) => (
-              <TouchableOpacity
-                key={p._id}
-                onPress={() => router.push({ pathname: "/submit-proof", params: { participationId: p._id } })}
-                style={{
-                  backgroundColor: "#1A1A1A",
-                  borderRadius: 20,
-                  padding: 20,
-                  marginBottom: 12,
-                }}
-              >
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-                    <View
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 20,
-                        backgroundColor: "#2A2A2A",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        marginRight: 12,
-                      }}
-                    >
-                      <Text style={{ fontSize: 20 }}>
-                        {p.challenge?.category === "sport" ? "🏋️" :
-                         p.challenge?.category === "screen_time" ? "📱" :
-                         p.challenge?.category === "procrastination" ? "💼" :
-                         p.challenge?.category === "social" ? "💬" : "🎯"}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600" }}>
-                        {p.challenge?.title || "Défi"}
-                      </Text>
-                      <Text style={{ color: "#666", fontSize: 13 }}>
-                        {p.challenge?.goal}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={{ backgroundColor: "#22c55e", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
-                    <Text style={{ color: "#fff", fontSize: 12, fontWeight: "600" }}>Actif</Text>
-                  </View>
-                </View>
-                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                  <Text style={{ color: "#666", fontSize: 13 }}>
-                    Tap pour soumettre une preuve
-                  </Text>
-                  <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>
-                    {p.betAmount}€ misés
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
-        </View>
-
-        {/* Quick Actions */}
-        <View style={{ marginBottom: 120 }}>
-          <Text style={{ color: "#fff", fontSize: 20, fontWeight: "bold", marginBottom: 16 }}>
-            Actions rapides
-          </Text>
-          <View style={{ flexDirection: "row", gap: 12 }}>
+        {/* Main Actions */}
+        <View style={styles.actionsContainer}>
+          <Animated.View entering={FadeInDown.delay(100).springify()}>
             <TouchableOpacity
               onPress={() => router.push("/create-challenge")}
-              style={{
-                flex: 1,
-                backgroundColor: "#fff",
-                borderRadius: 16,
-                padding: 20,
-                alignItems: "center",
-              }}
+              style={styles.mainButton}
+              activeOpacity={0.85}
             >
-              <Ionicons name="add-circle" size={28} color="#000" />
-              <Text style={{ color: "#000", fontSize: 14, fontWeight: "600", marginTop: 8 }}>
-                Créer un défi
-              </Text>
+              <View style={styles.mainButtonIcon}>
+                <Ionicons name="add" size={28} color={Colors.black} />
+              </View>
+              <Text style={styles.mainButtonText}>Créer un Pact</Text>
             </TouchableOpacity>
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.delay(150).springify()}>
             <TouchableOpacity
               onPress={() => router.push("/(tabs)/explore" as any)}
-              style={{
-                flex: 1,
-                backgroundColor: "#1A1A1A",
-                borderRadius: 16,
-                padding: 20,
-                alignItems: "center",
-              }}
+              style={styles.secondaryButton}
+              activeOpacity={0.85}
             >
-              <Ionicons name="compass" size={28} color="#fff" />
-              <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600", marginTop: 8 }}>
-                Explorer
-              </Text>
+              <View style={styles.secondaryButtonIcon}>
+                <Ionicons name="search" size={24} color={Colors.textPrimary} />
+              </View>
+              <Text style={styles.secondaryButtonText}>Rejoindre un Pact</Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: Spacing.xxxl,
+  },
+  logo: {
+    fontSize: 52,
+    fontWeight: "800",
+    color: Colors.textPrimary,
+    letterSpacing: 10,
+  },
+  tagline: {
+    ...Typography.bodyMedium,
+    color: Colors.textTertiary,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.huge,
+  },
+  authButton: {
+    backgroundColor: Colors.textPrimary,
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.huge,
+    borderRadius: BorderRadius.full,
+  },
+  authButtonText: {
+    ...Typography.labelLarge,
+    color: Colors.black,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: Spacing.xl,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: Spacing.lg,
+    marginBottom: Spacing.huge,
+  },
+  greeting: {
+    ...Typography.headlineLarge,
+    color: Colors.textPrimary,
+  },
+  balanceChip: {
+    backgroundColor: Colors.surfaceElevated,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  balanceText: {
+    ...Typography.labelLarge,
+    color: Colors.accent,
+  },
+  actionsContainer: {
+    flex: 1,
+    justifyContent: "center",
+    gap: Spacing.lg,
+    paddingBottom: Spacing.huge,
+  },
+  mainButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.textPrimary,
+    borderRadius: BorderRadius.xxl,
+    padding: Spacing.xl,
+    gap: Spacing.lg,
+  },
+  mainButtonIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.accent,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  mainButtonText: {
+    ...Typography.headlineMedium,
+    color: Colors.black,
+  },
+  secondaryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.xxl,
+    padding: Spacing.xl,
+    gap: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  secondaryButtonIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.surfaceHighlight,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  secondaryButtonText: {
+    ...Typography.headlineMedium,
+    color: Colors.textPrimary,
+  },
+});
