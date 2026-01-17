@@ -6,10 +6,13 @@ export default defineSchema({
   users: defineTable({
     name: v.string(),
     email: v.string(),
+    username: v.optional(v.string()), // @pseudo unique pour recherche d'amis
     balance: v.number(), // Solde en euros
     totalWins: v.number(),
     totalLosses: v.number(),
-  }).index("by_email", ["email"]),
+  })
+    .index("by_email", ["email"])
+    .index("by_username", ["username"]),
 
   // Défis
   challenges: defineTable({
@@ -176,4 +179,16 @@ export default defineSchema({
     .index("by_task", ["taskId"])
     .index("by_user", ["userId"])
     .index("by_task_user", ["taskId", "userId"]),
+
+  // Amis - relations d'amitié entre utilisateurs
+  friendships: defineTable({
+    userId: v.id("users"), // L'utilisateur qui a ajouté
+    friendId: v.id("users"), // L'ami ajouté
+    status: v.string(), // "pending", "accepted", "rejected"
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_friend", ["friendId"])
+    .index("by_user_friend", ["userId", "friendId"])
+    .index("by_status", ["status"]),
 });

@@ -13,6 +13,7 @@ import {
   Dimensions,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,6 +21,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useAuth } from "../../providers/AuthProvider";
 import { router } from "expo-router";
+import { Id } from "../../convex/_generated/dataModel";
 import Animated, {
   FadeInDown,
   FadeInUp,
@@ -50,6 +52,7 @@ export default function GroupsScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showActionMenu, setShowActionMenu] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [groupName, setGroupName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
@@ -57,9 +60,15 @@ export default function GroupsScreen() {
   const [taskFrequency, setTaskFrequency] = useState("daily");
   const [taskBet, setTaskBet] = useState("5");
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedFriends, setSelectedFriends] = useState<Id<"users">[]>([]);
 
   const groups = useQuery(
     api.groups.getMyGroups,
+    userId ? { userId } : "skip"
+  );
+
+  const friends = useQuery(
+    api.friends.getFriends,
     userId ? { userId } : "skip"
   );
 
@@ -67,16 +76,26 @@ export default function GroupsScreen() {
   const joinGroup = useMutation(api.groups.joinGroup);
   const createTask = useMutation(api.groups.createTask);
 
+  const hasGroups = groups && groups.length > 0;
+
   const handleCreateGroup = async () => {
     if (!userId || !groupName.trim()) return;
     setIsLoading(true);
     try {
-      const result = await createGroup({ name: groupName.trim(), creatorId: userId });
+      const result = await createGroup({
+        name: groupName.trim(),
+        creatorId: userId,
+        memberIds: selectedFriends.length > 0 ? selectedFriends : undefined,
+      });
       setShowCreateModal(false);
       setGroupName("");
+      setSelectedFriends([]);
+      const friendsAddedText = selectedFriends.length > 0
+        ? `\n\n${selectedFriends.length} ami${selectedFriends.length > 1 ? "s" : ""} ajouté${selectedFriends.length > 1 ? "s" : ""} au groupe!`
+        : "";
       Alert.alert(
-        "Groupe cree!",
-        `Code d'invitation: ${result.inviteCode}\n\nPartage-le avec tes amis!`,
+        "Groupe créé!",
+        `Code d'invitation: ${result.inviteCode}${friendsAddedText}\n\nPartage-le avec tes amis!`,
         [
           {
             text: "Partager",
@@ -90,6 +109,14 @@ export default function GroupsScreen() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const toggleFriendSelection = (friendId: Id<"users">) => {
+    setSelectedFriends((prev) =>
+      prev.includes(friendId)
+        ? prev.filter((id) => id !== friendId)
+        : [...prev, friendId]
+    );
   };
 
   const handleJoinGroup = async () => {
@@ -121,7 +148,7 @@ export default function GroupsScreen() {
       setShowTaskModal(false);
       setTaskTitle("");
       setTaskBet("5");
-      Alert.alert("Tache creee!", "Tout le monde peut maintenant participer.");
+      Alert.alert("Tâche créée!", "Tout le monde peut maintenant participer.");
     } catch (error: any) {
       Alert.alert("Erreur", error.message);
     } finally {
@@ -132,7 +159,7 @@ export default function GroupsScreen() {
   const shareInviteCode = async (code: string) => {
     try {
       await Share.share({
-        message: `Rejoins mon groupe sur PACT!\n\nCode: ${code}\n\nTelecharge l'app et entre ce code!`,
+        message: `Rejoins mon groupe sur PACT!\n\nCode: ${code}\n\nTélécharge l'app et entre ce code!`,
       });
     } catch (error) {
       // User cancelled
@@ -142,6 +169,16 @@ export default function GroupsScreen() {
   const openTaskModal = (groupId: string) => {
     setSelectedGroupId(groupId);
     setShowTaskModal(true);
+  };
+
+  const openCreateModal = () => {
+    setShowActionMenu(false);
+    setShowCreateModal(true);
+  };
+
+  const openJoinModal = () => {
+    setShowActionMenu(false);
+    setShowJoinModal(true);
   };
 
   if (!userId || !user) {
@@ -177,36 +214,53 @@ export default function GroupsScreen() {
       >
         {/* Header */}
         <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.header}>
-          <Text style={styles.headerTitle}>Groupes</Text>
-          <Text style={styles.headerSubtitle}>Defie tes amis au quotidien</Text>
+          <View>
+            <Text style={styles.headerTitle}>Groupes</Text>
+            <Text style={styles.headerSubtitle}>Défie tes amis au quotidien</Text>
+          </View>
+          {/* Show + button in header when user has groups */}
+          {hasGroups && (
+            <TouchableOpacity
+              onPress={() => setShowActionMenu(true)}
+              style={styles.headerAddButton}
+            >
+              <Ionicons name="add" size={28} color={Colors.textPrimary} />
+            </TouchableOpacity>
+          )}
         </Animated.View>
 
-        {/* Create/Join Buttons */}
-        <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.actionsRow}>
-          <TouchableOpacity
-            onPress={() => setShowCreateModal(true)}
-            style={styles.actionButton}
-            activeOpacity={0.85}
-          >
-            <View style={styles.actionButtonIcon}>
-              <Ionicons name="add" size={28} color={Colors.success} />
-            </View>
-            <Text style={styles.actionButtonText}>Creer</Text>
-          </TouchableOpacity>
+        {/* Show big buttons only when no groups */}
+        {!hasGroups && groups !== undefined && (
+          <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.actionsRow}>
+            <TouchableOpacity
+              onPress={() => setShowCreateModal(true)}
+              style={styles.actionButton}
+              activeOpacity={0.85}
+            >
+              <View style={styles.actionButtonIcon}>
+                <Ionicons name="add" size={32} color={Colors.textPrimary} />
+              </View>
+              <View style={styles.actionButtonTextContainer}>
+                <Text style={styles.actionButtonText}>Créer</Text>
+                <Text style={styles.actionButtonSubtext}>Nouveau groupe</Text>
+              </View>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => setShowJoinModal(true)}
-            style={[styles.actionButton, styles.actionButtonSecondary]}
-            activeOpacity={0.85}
-          >
-            <View style={[styles.actionButtonIcon, styles.actionButtonIconSecondary]}>
-              <Ionicons name="enter" size={28} color={Colors.textPrimary} />
-            </View>
-            <Text style={[styles.actionButtonText, styles.actionButtonTextSecondary]}>
-              Rejoindre
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
+            <TouchableOpacity
+              onPress={() => setShowJoinModal(true)}
+              style={styles.actionButton}
+              activeOpacity={0.85}
+            >
+              <View style={styles.actionButtonIcon}>
+                <Ionicons name="enter" size={32} color={Colors.textPrimary} />
+              </View>
+              <View style={styles.actionButtonTextContainer}>
+                <Text style={styles.actionButtonText}>Rejoindre</Text>
+                <Text style={styles.actionButtonSubtext}>Avec un code</Text>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
 
         {/* Groups List */}
         {groups === undefined ? (
@@ -218,7 +272,7 @@ export default function GroupsScreen() {
             <Ionicons name="people-outline" size={64} color={Colors.textTertiary} />
             <Text style={styles.emptyTitle}>Pas encore de groupe</Text>
             <Text style={styles.emptyText}>
-              Cree un groupe et invite tes amis pour commencer!
+              Crée un groupe et invite tes amis pour commencer!
             </Text>
           </Animated.View>
         ) : (
@@ -226,9 +280,13 @@ export default function GroupsScreen() {
             {groups.map((group: any, index: number) => (
               <Animated.View
                 key={group._id}
-                entering={FadeInUp.delay(150 + index * 80).springify()}
+                entering={FadeInUp.delay(100 + index * 80).springify()}
               >
-                <View style={styles.groupCard}>
+                <TouchableOpacity
+                  onPress={() => router.push({ pathname: "/group-detail", params: { groupId: group._id } })}
+                  style={styles.groupCard}
+                  activeOpacity={0.85}
+                >
                   <View style={styles.groupHeader}>
                     <View style={styles.groupInfo}>
                       <Text style={styles.groupName}>{group.name}</Text>
@@ -245,7 +303,10 @@ export default function GroupsScreen() {
                       </View>
                     </View>
                     <TouchableOpacity
-                      onPress={() => shareInviteCode(group.inviteCode)}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        shareInviteCode(group.inviteCode);
+                      }}
                       style={styles.shareButton}
                     >
                       <Ionicons name="share-social" size={20} color={Colors.success} />
@@ -256,7 +317,7 @@ export default function GroupsScreen() {
                   <View style={styles.groupStats}>
                     <View style={styles.statItem}>
                       <Text style={styles.statValue}>{group.taskCount || 0}</Text>
-                      <Text style={styles.statLabel}>Taches actives</Text>
+                      <Text style={styles.statLabel}>Tâches actives</Text>
                     </View>
                     <View style={styles.statDivider} />
                     <View style={styles.statItem}>
@@ -269,13 +330,22 @@ export default function GroupsScreen() {
 
                   {/* Add Task Button */}
                   <TouchableOpacity
-                    onPress={() => openTaskModal(group._id)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      openTaskModal(group._id);
+                    }}
                     style={styles.addTaskButton}
                   >
                     <Ionicons name="add-circle" size={20} color={Colors.success} />
-                    <Text style={styles.addTaskText}>Ajouter une tache</Text>
+                    <Text style={styles.addTaskText}>Ajouter une tâche</Text>
                   </TouchableOpacity>
-                </View>
+
+                  {/* View Details Indicator */}
+                  <View style={styles.viewDetailsIndicator}>
+                    <Text style={styles.viewDetailsText}>Voir les détails</Text>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
+                  </View>
+                </TouchableOpacity>
               </Animated.View>
             ))}
           </View>
@@ -283,6 +353,38 @@ export default function GroupsScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Action Menu Modal (when user has groups) */}
+      <Modal
+        visible={showActionMenu}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowActionMenu(false)}
+      >
+        <Pressable style={styles.actionMenuOverlay} onPress={() => setShowActionMenu(false)}>
+          <Animated.View entering={FadeIn.duration(150)} style={styles.actionMenuContainer}>
+            <TouchableOpacity
+              onPress={openCreateModal}
+              style={styles.actionMenuItem}
+            >
+              <View style={styles.actionMenuIcon}>
+                <Ionicons name="add" size={24} color={Colors.textPrimary} />
+              </View>
+              <Text style={styles.actionMenuText}>Créer un groupe</Text>
+            </TouchableOpacity>
+            <View style={styles.actionMenuDivider} />
+            <TouchableOpacity
+              onPress={openJoinModal}
+              style={styles.actionMenuItem}
+            >
+              <View style={styles.actionMenuIcon}>
+                <Ionicons name="enter" size={24} color={Colors.textPrimary} />
+              </View>
+              <Text style={styles.actionMenuText}>Rejoindre un groupe</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </Pressable>
+      </Modal>
 
       {/* Create Group Modal */}
       <Modal
@@ -294,10 +396,10 @@ export default function GroupsScreen() {
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
+          keyboardVerticalOffset={0}
         >
-          <TouchableOpacity
+          <Pressable
             style={styles.modalBackdrop}
-            activeOpacity={1}
             onPress={() => setShowCreateModal(false)}
           />
           <Animated.View
@@ -306,36 +408,92 @@ export default function GroupsScreen() {
           >
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Creer un groupe</Text>
+              <Text style={styles.modalTitle}>Créer un groupe</Text>
               <TouchableOpacity onPress={() => setShowCreateModal(false)}>
                 <Ionicons name="close" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Nom du groupe</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Ex: Les Warriors"
-              placeholderTextColor={Colors.textTertiary}
-              value={groupName}
-              onChangeText={setGroupName}
-              autoFocus
-            />
-
-            <TouchableOpacity
-              onPress={handleCreateGroup}
-              disabled={isLoading || !groupName.trim()}
-              style={[
-                styles.modalSubmitButton,
-                (!groupName.trim() || isLoading) && styles.modalSubmitButtonDisabled,
-              ]}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
-              {isLoading ? (
-                <ActivityIndicator color={Colors.black} />
-              ) : (
-                <Text style={styles.modalSubmitButtonText}>Creer le groupe</Text>
+              <Text style={styles.inputLabel}>Nom du groupe</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Ex: Les Warriors"
+                placeholderTextColor={Colors.textTertiary}
+                value={groupName}
+                onChangeText={setGroupName}
+                autoFocus
+              />
+
+              {/* Friends Selection */}
+              {friends && friends.length > 0 && (
+                <View style={styles.friendsSelectionSection}>
+                  <Text style={styles.inputLabel}>Ajouter des amis (optionnel)</Text>
+                  <View style={styles.friendsSelectionList}>
+                    {friends.map((friend: any) => {
+                      const isSelected = selectedFriends.includes(friend._id);
+                      return (
+                        <TouchableOpacity
+                          key={friend._id}
+                          onPress={() => toggleFriendSelection(friend._id)}
+                          style={[
+                            styles.friendSelectionItem,
+                            isSelected && styles.friendSelectionItemSelected,
+                          ]}
+                          disabled={isLoading}
+                        >
+                          <View style={[
+                            styles.friendSelectionAvatar,
+                            isSelected && styles.friendSelectionAvatarSelected,
+                          ]}>
+                            <Text style={[
+                              styles.friendSelectionAvatarText,
+                              isSelected && styles.friendSelectionAvatarTextSelected,
+                            ]}>
+                              {friend.name.charAt(0).toUpperCase()}
+                            </Text>
+                          </View>
+                          <Text style={[
+                            styles.friendSelectionName,
+                            isSelected && styles.friendSelectionNameSelected,
+                          ]} numberOfLines={1}>
+                            {friend.name}
+                          </Text>
+                          {isSelected && (
+                            <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  {selectedFriends.length > 0 && (
+                    <Text style={styles.selectedFriendsCount}>
+                      {selectedFriends.length} ami{selectedFriends.length > 1 ? "s" : ""} sélectionné{selectedFriends.length > 1 ? "s" : ""}
+                    </Text>
+                  )}
+                </View>
               )}
-            </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleCreateGroup}
+                disabled={isLoading || !groupName.trim()}
+                style={[
+                  styles.modalSubmitButton,
+                  (!groupName.trim() || isLoading) && styles.modalSubmitButtonDisabled,
+                ]}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color={Colors.black} />
+                ) : (
+                  <Text style={styles.modalSubmitButtonText}>Créer le groupe</Text>
+                )}
+              </TouchableOpacity>
+
+              <View style={{ height: 20 }} />
+            </ScrollView>
           </Animated.View>
         </KeyboardAvoidingView>
       </Modal>
@@ -350,10 +508,10 @@ export default function GroupsScreen() {
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
+          keyboardVerticalOffset={0}
         >
-          <TouchableOpacity
+          <Pressable
             style={styles.modalBackdrop}
-            activeOpacity={1}
             onPress={() => setShowJoinModal(false)}
           />
           <Animated.View
@@ -368,32 +526,37 @@ export default function GroupsScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Code d'invitation</Text>
-            <TextInput
-              style={styles.codeInput}
-              placeholder="ABC123"
-              placeholderTextColor={Colors.textTertiary}
-              value={inviteCode}
-              onChangeText={(text) => setInviteCode(text.toUpperCase().slice(0, 6))}
-              autoCapitalize="characters"
-              maxLength={6}
-              autoFocus
-            />
-
-            <TouchableOpacity
-              onPress={handleJoinGroup}
-              disabled={isLoading || inviteCode.length !== 6}
-              style={[
-                styles.modalSubmitButton,
-                (inviteCode.length !== 6 || isLoading) && styles.modalSubmitButtonDisabled,
-              ]}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
-              {isLoading ? (
-                <ActivityIndicator color={Colors.black} />
-              ) : (
-                <Text style={styles.modalSubmitButtonText}>Rejoindre</Text>
-              )}
-            </TouchableOpacity>
+              <Text style={styles.inputLabel}>Code d'invitation</Text>
+              <TextInput
+                style={styles.codeInput}
+                placeholder="ABC123"
+                placeholderTextColor={Colors.textTertiary}
+                value={inviteCode}
+                onChangeText={(text) => setInviteCode(text.toUpperCase().slice(0, 6))}
+                autoCapitalize="characters"
+                maxLength={6}
+                autoFocus
+              />
+
+              <TouchableOpacity
+                onPress={handleJoinGroup}
+                disabled={isLoading || inviteCode.length !== 6}
+                style={[
+                  styles.modalSubmitButton,
+                  (inviteCode.length !== 6 || isLoading) && styles.modalSubmitButtonDisabled,
+                ]}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color={Colors.black} />
+                ) : (
+                  <Text style={styles.modalSubmitButtonText}>Rejoindre</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
           </Animated.View>
         </KeyboardAvoidingView>
       </Modal>
@@ -408,26 +571,29 @@ export default function GroupsScreen() {
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
+          keyboardVerticalOffset={0}
         >
-          <TouchableOpacity
+          <Pressable
             style={styles.modalBackdrop}
-            activeOpacity={1}
             onPress={() => setShowTaskModal(false)}
           />
           <Animated.View
             entering={SlideInDown.springify()}
-            style={styles.modalContainer}
+            style={styles.modalContainerLarge}
           >
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nouvelle tache</Text>
+              <Text style={styles.modalTitle}>Nouvelle tâche</Text>
               <TouchableOpacity onPress={() => setShowTaskModal(false)}>
                 <Ionicons name="close" size={24} color={Colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.inputLabel}>Titre de la tache</Text>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <Text style={styles.inputLabel}>Titre de la tâche</Text>
               <TextInput
                 style={styles.textInput}
                 placeholder="Ex: 10 000 pas"
@@ -436,7 +602,7 @@ export default function GroupsScreen() {
                 onChangeText={setTaskTitle}
               />
 
-              <Text style={styles.inputLabel}>Frequence</Text>
+              <Text style={styles.inputLabel}>Fréquence</Text>
               <View style={styles.frequencyRow}>
                 {(["daily", "weekly", "monthly", "yearly"] as const).map((freq) => (
                   <TouchableOpacity
@@ -490,9 +656,11 @@ export default function GroupsScreen() {
                 {isLoading ? (
                   <ActivityIndicator color={Colors.black} />
                 ) : (
-                  <Text style={styles.modalSubmitButtonText}>Creer la tache</Text>
+                  <Text style={styles.modalSubmitButtonText}>Créer la tâche</Text>
                 )}
               </TouchableOpacity>
+
+              <View style={{ height: 20 }} />
             </ScrollView>
           </Animated.View>
         </KeyboardAvoidingView>
@@ -521,6 +689,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
   },
   header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: Spacing.xl,
   },
   headerTitle: {
@@ -533,7 +704,17 @@ const styles = StyleSheet.create({
     color: Colors.textTertiary,
     marginTop: Spacing.xs,
   },
-  // Actions Row
+  headerAddButton: {
+    width: 48,
+    height: 48,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.surfaceElevated,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  // Big Action Buttons (when no groups)
   actionsRow: {
     flexDirection: "row",
     gap: Spacing.md,
@@ -541,37 +722,33 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.success,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    gap: Spacing.sm,
-    ...Shadows.md,
-  },
-  actionButtonSecondary: {
     backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
     borderWidth: 2,
     borderColor: Colors.border,
+    ...Shadows.md,
   },
   actionButtonIcon: {
-    width: 44,
-    height: 44,
+    width: 56,
+    height: 56,
     borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.successMuted,
+    backgroundColor: Colors.surfaceHighlight,
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: Spacing.md,
   },
-  actionButtonIconSecondary: {
-    backgroundColor: Colors.surfaceHighlight,
+  actionButtonTextContainer: {
+    gap: Spacing.xs,
   },
   actionButtonText: {
-    ...Typography.labelLarge,
-    color: Colors.black,
-  },
-  actionButtonTextSecondary: {
+    fontSize: 18,
+    fontWeight: "700",
     color: Colors.textPrimary,
+  },
+  actionButtonSubtext: {
+    ...Typography.bodySmall,
+    color: Colors.textTertiary,
   },
   // Loading & Empty
   loadingSection: {
@@ -702,8 +879,60 @@ const styles = StyleSheet.create({
     ...Typography.labelMedium,
     color: Colors.success,
   },
+  viewDetailsIndicator: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: Spacing.lg,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    gap: Spacing.xs,
+  },
+  viewDetailsText: {
+    ...Typography.bodySmall,
+    color: Colors.textTertiary,
+  },
   bottomSpacer: {
     height: 120,
+  },
+  // Action Menu Modal
+  actionMenuOverlay: {
+    flex: 1,
+    backgroundColor: Colors.overlay,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Spacing.xl,
+  },
+  actionMenuContainer: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    width: "100%",
+    maxWidth: 320,
+  },
+  actionMenuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.lg,
+    gap: Spacing.md,
+  },
+  actionMenuIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.surfaceHighlight,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  actionMenuText: {
+    ...Typography.labelLarge,
+    color: Colors.textPrimary,
+  },
+  actionMenuDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginHorizontal: Spacing.lg,
   },
   // Modal Styles
   modalOverlay: {
@@ -721,7 +950,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.huge,
-    maxHeight: "85%",
+  },
+  modalContainerLarge: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: BorderRadius.xxl,
+    borderTopRightRadius: BorderRadius.xxl,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.huge,
+    maxHeight: "80%",
   },
   modalHandle: {
     width: 40,
@@ -842,5 +1079,62 @@ const styles = StyleSheet.create({
   modalSubmitButtonText: {
     ...Typography.labelLarge,
     color: Colors.black,
+  },
+  // Friends Selection in Create Modal
+  friendsSelectionSection: {
+    marginBottom: Spacing.xl,
+  },
+  friendsSelectionList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+  },
+  friendSelectionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surfaceElevated,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: Spacing.sm,
+  },
+  friendSelectionItemSelected: {
+    backgroundColor: Colors.successMuted,
+    borderColor: Colors.success,
+  },
+  friendSelectionAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.surfaceHighlight,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  friendSelectionAvatarSelected: {
+    backgroundColor: Colors.success,
+  },
+  friendSelectionAvatarText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: Colors.textPrimary,
+  },
+  friendSelectionAvatarTextSelected: {
+    color: Colors.black,
+  },
+  friendSelectionName: {
+    ...Typography.labelMedium,
+    color: Colors.textPrimary,
+    maxWidth: 100,
+  },
+  friendSelectionNameSelected: {
+    color: Colors.success,
+  },
+  selectedFriendsCount: {
+    ...Typography.bodySmall,
+    color: Colors.success,
+    marginTop: Spacing.md,
+    textAlign: "center",
   },
 });

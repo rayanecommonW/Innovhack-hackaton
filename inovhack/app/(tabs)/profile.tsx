@@ -16,6 +16,8 @@ import { useAuth } from "../../providers/AuthProvider";
 import { router } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import AddFundsModal from "../../components/AddFundsModal";
+import FriendsModal from "../../components/FriendsModal";
+import Leaderboard from "../../components/Leaderboard";
 import { getCategoryName } from "../../constants/categories";
 import {
   Colors,
@@ -24,9 +26,20 @@ import {
   Typography,
 } from "../../constants/theme";
 
+// Mock leaderboard data
+const MOCK_LEADERBOARD = [
+  { id: "1", name: "Marie", points: 1250, streak: 15 },
+  { id: "2", name: "Lucas", points: 980, streak: 12 },
+  { id: "3", name: "Emma", points: 875, streak: 8 },
+  { id: "4", name: "Thomas", points: 720, streak: 6, isCurrentUser: true },
+  { id: "5", name: "Julie", points: 650, streak: 5 },
+  { id: "6", name: "Antoine", points: 520, streak: 4 },
+];
+
 export default function ProfileScreen() {
   const { user, userId, logout, isLoading, refreshUser } = useAuth();
   const [showAddFunds, setShowAddFunds] = useState(false);
+  const [showFriends, setShowFriends] = useState(false);
 
   const participations = useQuery(
     api.participations.getMyParticipations,
@@ -143,6 +156,28 @@ export default function ProfileScreen() {
           </View>
         </Animated.View>
 
+        {/* Friends Card */}
+        <Animated.View entering={FadeInDown.delay(160).springify()}>
+          <TouchableOpacity
+            onPress={() => setShowFriends(true)}
+            style={styles.friendsCard}
+            activeOpacity={0.8}
+          >
+            <View style={styles.friendsCardLeft}>
+              <View style={styles.friendsCardIcon}>
+                <Ionicons name="people" size={24} color={Colors.accent} />
+              </View>
+              <View>
+                <Text style={styles.friendsCardTitle}>Mes amis</Text>
+                <Text style={styles.friendsCardSubtitle}>
+                  Ajouter et gérer tes amis
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
+          </TouchableOpacity>
+        </Animated.View>
+
         {/* Community Proofs to Vote - Always visible */}
         <Animated.View entering={FadeInDown.delay(165).springify()}>
           <TouchableOpacity
@@ -222,6 +257,9 @@ export default function ProfileScreen() {
         )}
 
         {/* Logout */}
+        {/* Leaderboard */}
+        <Leaderboard users={MOCK_LEADERBOARD} title="Classement Amis" />
+
         <Animated.View entering={FadeInDown.delay(200).springify()}>
           <TouchableOpacity
             onPress={handleLogout}
@@ -242,6 +280,14 @@ export default function ProfileScreen() {
         onClose={() => setShowAddFunds(false)}
         userId={userId}
         onSuccess={refreshUser}
+      />
+
+      {/* Friends Modal */}
+      <FriendsModal
+        visible={showFriends}
+        onClose={() => setShowFriends(false)}
+        userId={userId}
+        userUsername={user?.username}
       />
     </SafeAreaView>
   );
@@ -366,6 +412,40 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     backgroundColor: Colors.border,
+  },
+  // Friends Card
+  friendsCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  friendsCardLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  friendsCardIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.surfaceHighlight,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  friendsCardTitle: {
+    ...Typography.labelLarge,
+    color: Colors.textPrimary,
+  },
+  friendsCardSubtitle: {
+    ...Typography.bodySmall,
+    color: Colors.textTertiary,
+    marginTop: Spacing.xs,
   },
   // Community Proofs Card
   communityProofsCard: {

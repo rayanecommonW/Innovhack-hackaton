@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -27,6 +28,7 @@ import Animated, {
   ZoomIn,
   BounceIn,
   FadeIn,
+  FadeOut,
   useSharedValue,
   useAnimatedStyle,
   withSpring,
@@ -34,6 +36,7 @@ import Animated, {
   withTiming,
   withRepeat,
   Easing,
+  runOnJS,
 } from "react-native-reanimated";
 import { useEffect } from "react";
 import { getCategoryName } from "../../constants/categories";
@@ -44,8 +47,32 @@ import {
   Typography,
   Shadows,
 } from "../../constants/theme";
+import StatsCard from "../../components/StatsCard";
+import StreakCalendar from "../../components/StreakCalendar";
+import ActivityFeed from "../../components/ActivityFeed";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// Mock data for demo
+const MOCK_STATS = {
+  totalWon: 145,
+  totalLost: 30,
+  streak: 7,
+  completedChallenges: 12,
+  level: 8,
+  xp: 750,
+  xpToNextLevel: 1000,
+};
+
+const MOCK_COMPLETED_DAYS = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17];
+
+const MOCK_ACTIVITIES = [
+  { id: "1", userName: "Marie", action: "completed" as const, challengeTitle: "Sport 4x/semaine", timeAgo: "il y a 2min" },
+  { id: "2", userName: "Lucas", action: "won" as const, challengeTitle: "Pas d'alcool", amount: 50, timeAgo: "il y a 15min" },
+  { id: "3", userName: "Emma", action: "joined" as const, challengeTitle: "Méditation", timeAgo: "il y a 1h" },
+  { id: "4", userName: "Thomas", action: "completed" as const, challengeTitle: "Lecture", timeAgo: "il y a 2h" },
+  { id: "5", userName: "Julie", action: "failed" as const, challengeTitle: "Se lever tôt", amount: 20, timeAgo: "il y a 3h" },
+];
 
 export default function HomeScreen() {
   const { user, userId, isLoading: authLoading } = useAuth();
@@ -53,6 +80,8 @@ export default function HomeScreen() {
   const [showJoinOptions, setShowJoinOptions] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(true); // Force welcome screen to stay
 
   // Get user's active participations
   const participations = useQuery(
@@ -100,36 +129,68 @@ export default function HomeScreen() {
     router.push({ pathname: "/submit-proof", params: { participationId } });
   };
 
-  // Pulse animation for loading glow
-  const pulseScale = useSharedValue(1);
-  const pulseOpacity = useSharedValue(0.3);
+  // Smooth transition animation
+  const welcomeOpacity = useSharedValue(1);
 
-  useEffect(() => {
-    if (authLoading) {
-      pulseScale.value = withRepeat(
-        withTiming(1.3, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
-        -1,
-        true
-      );
-      pulseOpacity.value = withRepeat(
-        withTiming(0.7, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
-        -1,
-        true
-      );
-    }
-  }, [authLoading]);
-
-  const glowStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pulseScale.value }],
-    opacity: pulseOpacity.value,
+  const welcomeContainerStyle = useAnimatedStyle(() => ({
+    opacity: welcomeOpacity.value,
   }));
 
+  const handleCommencer = () => {
+    setIsTransitioning(true);
+    welcomeOpacity.value = withTiming(0, { duration: 400, easing: Easing.out(Easing.ease) }, () => {
+      runOnJS(setShowWelcome)(false);
+      // If user exists, just hide welcome. If not, go to auth.
+      if (!user) {
+        runOnJS(router.push)("/auth");
+      }
+    });
+  };
+
+  // Show welcome screen until user clicks "Commencer"
+  if (showWelcome) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Animated.View style={[styles.welcomeContainer, welcomeContainerStyle]}>
+          {/* Logo with dramatic entrance */}
+          <Animated.View entering={BounceIn.delay(100).duration(800)}>
+            <Image
+              source={require("../../assets/images/logo_big.png")}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </Animated.View>
+
+          {/* Tagline with staggered fade */}
+          <Animated.Text
+            entering={FadeInUp.delay(400).duration(600).springify()}
+            style={styles.tagline}
+          >
+            Engage. Parie. Gagne.
+          </Animated.Text>
+
+          {/* CTA button centered */}
+          <Animated.View entering={FadeInUp.delay(700).duration(500).springify()}>
+            <TouchableOpacity
+              onPress={handleCommencer}
+              style={styles.authButton}
+              activeOpacity={0.8}
+              disabled={isTransitioning}
+            >
+              <Text style={styles.authButtonText}>Commencer</Text>
+              <Ionicons name="arrow-forward" size={20} color={Colors.black} />
+            </TouchableOpacity>
+          </Animated.View>
+        </Animated.View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show loading only after welcome is dismissed
   if (authLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          {/* Animated glow behind logo */}
-          <Animated.View style={[styles.logoGlow, glowStyle]} />
           <Animated.Text
             entering={ZoomIn.duration(800).springify()}
             style={styles.logo}
@@ -148,43 +209,10 @@ export default function HomeScreen() {
     );
   }
 
+  // If not logged in after welcome, redirect to auth
   if (!user) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          {/* Subtle background glow */}
-          <View style={styles.welcomeGlow} />
-
-          {/* Logo with dramatic entrance */}
-          <Animated.Text
-            entering={BounceIn.delay(100).duration(800)}
-            style={styles.logo}
-          >
-            PACT
-          </Animated.Text>
-
-          {/* Tagline with staggered fade */}
-          <Animated.Text
-            entering={FadeInUp.delay(400).duration(600).springify()}
-            style={styles.tagline}
-          >
-            Engage. Parie. Gagne.
-          </Animated.Text>
-
-          {/* CTA button with slide up */}
-          <Animated.View entering={SlideInDown.delay(700).duration(500).springify()}>
-            <TouchableOpacity
-              onPress={() => router.push("/auth")}
-              style={styles.authButton}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.authButtonText}>Commencer</Text>
-              <Ionicons name="arrow-forward" size={20} color={Colors.black} />
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
-      </SafeAreaView>
-    );
+    router.replace("/auth");
+    return null;
   }
 
   return (
@@ -206,6 +234,15 @@ export default function HomeScreen() {
             <Text style={styles.balanceText}>{user.balance.toFixed(0)}€</Text>
           </TouchableOpacity>
         </Animated.View>
+
+        {/* Stats Card - Level & XP */}
+        <StatsCard {...MOCK_STATS} />
+
+        {/* Activity Feed */}
+        <ActivityFeed activities={MOCK_ACTIVITIES} />
+
+        {/* Streak Calendar */}
+        <StreakCalendar completedDays={MOCK_COMPLETED_DAYS} currentStreak={MOCK_STATS.streak} />
 
         {/* Active Pacts Section - TOP PRIORITY */}
         {activePacts.length > 0 && (
@@ -408,18 +445,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: Spacing.xxxl,
   },
+  welcomeContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: Spacing.xxxl,
+  },
   logo: {
     fontSize: 64,
     fontWeight: "900",
     color: Colors.textPrimary,
     letterSpacing: 12,
   },
-  logoGlow: {
-    position: "absolute",
+  logoImage: {
     width: 200,
     height: 200,
-    borderRadius: 100,
-    backgroundColor: Colors.success,
+    marginBottom: Spacing.lg,
   },
   loadingDots: {
     flexDirection: "row",
@@ -432,19 +473,11 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: Colors.success,
   },
-  welcomeGlow: {
-    position: "absolute",
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: Colors.success,
-    opacity: 0.1,
-  },
   tagline: {
     ...Typography.bodyLarge,
     color: Colors.textSecondary,
     marginTop: Spacing.lg,
-    marginBottom: Spacing.huge,
+    marginBottom: Spacing.xxl,
   },
   authButton: {
     flexDirection: "row",
@@ -467,6 +500,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.lg,
+    flexGrow: 1,
   },
   header: {
     flexDirection: "row",
@@ -512,18 +546,13 @@ const styles = StyleSheet.create({
   activePactCard: {
     backgroundColor: Colors.surfaceElevated,
     borderRadius: BorderRadius.xl,
-    borderWidth: 2,
-    borderColor: Colors.accent,
+    borderWidth: 1,
+    borderColor: Colors.border,
     overflow: "hidden",
-    ...Shadows.md,
+    ...Shadows.sm,
   },
   activePactGlow: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: Colors.accent,
+    display: "none",
   },
   activePactContent: {
     flexDirection: "row",
@@ -564,6 +593,8 @@ const styles = StyleSheet.create({
   // Main Actions
   actionsContainer: {
     gap: Spacing.lg,
+    flex: 1,
+    justifyContent: "center",
   },
   mainButton: {
     flexDirection: "row",

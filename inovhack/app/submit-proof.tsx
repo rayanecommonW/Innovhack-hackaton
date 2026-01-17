@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -34,6 +34,7 @@ import {
   BorderRadius,
   Typography,
 } from "../constants/theme";
+import ConfettiCelebration, { ConfettiRef } from "../components/ConfettiCelebration";
 
 type ValidationState = "idle" | "uploading" | "validating" | "approved" | "rejected";
 type FileType = "image" | "pdf" | "document" | null;
@@ -73,6 +74,7 @@ export default function SubmitProofScreen() {
   const [validationResult, setValidationResult] = useState<{ approved: boolean; comment: string } | null>(null);
 
   const rotation = useSharedValue(0);
+  const confettiRef = useRef<ConfettiRef>(null);
 
   useEffect(() => {
     if (validationState === "validating" || validationState === "uploading") {
@@ -81,6 +83,10 @@ export default function SubmitProofScreen() {
         -1,
         false
       );
+    }
+    // Fire confetti when approved
+    if (validationState === "approved") {
+      confettiRef.current?.fire();
     }
   }, [validationState]);
 
@@ -432,6 +438,7 @@ export default function SubmitProofScreen() {
         <View style={styles.bottomSpacer} />
         </ScrollView>
       </KeyboardAvoidingView>
+      <ConfettiCelebration ref={confettiRef} />
     </SafeAreaView>
   );
 }

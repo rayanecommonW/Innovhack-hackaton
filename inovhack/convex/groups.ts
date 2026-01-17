@@ -16,6 +16,7 @@ export const createGroup = mutation({
   args: {
     name: v.string(),
     creatorId: v.id("users"),
+    memberIds: v.optional(v.array(v.id("users"))), // Optional friends to add
   },
   handler: async (ctx, args) => {
     const inviteCode = generateInviteCode();
@@ -34,6 +35,21 @@ export const createGroup = mutation({
       role: "admin",
       joinedAt: Date.now(),
     });
+
+    // Add friends as members
+    if (args.memberIds && args.memberIds.length > 0) {
+      for (const memberId of args.memberIds) {
+        // Don't add creator twice
+        if (memberId !== args.creatorId) {
+          await ctx.db.insert("groupMembers", {
+            groupId,
+            userId: memberId,
+            role: "member",
+            joinedAt: Date.now(),
+          });
+        }
+      }
+    }
 
     return { groupId, inviteCode };
   },
@@ -196,6 +212,8 @@ export const getGroupTasks = query({
               userId: member.userId,
               userName: user?.name || "Inconnu",
               completed: taskProgress?.completed || false,
+              proofUrl: taskProgress?.proofUrl || null,
+              completedAt: taskProgress?.completedAt || null,
             };
           })
         );
