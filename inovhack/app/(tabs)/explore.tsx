@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useAuth } from "../../providers/AuthProvider";
 import { router } from "expo-router";
@@ -155,6 +155,21 @@ export default function ExploreScreen() {
     api.friends.getFriendsChallenges,
     userId ? { userId } : "skip"
   );
+  const seedDemoChallenges = useMutation(api.challenges.seedDemoChallenges);
+  const [isSeeding, setIsSeeding] = useState(false);
+
+  const handleSeedDemo = async () => {
+    if (!userId) return;
+    setIsSeeding(true);
+    try {
+      await seedDemoChallenges({ creatorId: userId });
+      onRefresh();
+    } catch (error) {
+      console.error("Error seeding challenges:", error);
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -332,11 +347,98 @@ export default function ExploreScreen() {
           </ScrollView>
         </Animated.View>
 
-        {/* 2. PACTS POPULAIRES - Horizontal scroll */}
-        <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.popularSection}>
+        {/* 2. PACTS COMMUNAUTAIRES - Real joinable pacts */}
+        <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.communitySection}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="globe" size={18} color={Colors.info} />
+            <Text style={styles.sectionTitle}>PACTS COMMUNAUTAIRES</Text>
+          </View>
+
+          {challenges === undefined ? (
+            <ActivityIndicator color={Colors.info} style={{ padding: Spacing.lg }} />
+          ) : filteredChallenges.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Ionicons name="rocket-outline" size={32} color={Colors.accent} />
+              <Text style={styles.emptyCardText}>
+                Aucun pact disponible pour le moment
+              </Text>
+              <View style={styles.emptyCardActions}>
+                <TouchableOpacity
+                  onPress={() => router.push("/create-challenge")}
+                  style={styles.createPactButton}
+                >
+                  <Ionicons name="add" size={18} color={Colors.black} />
+                  <Text style={styles.createPactButtonText}>Créer un pact</Text>
+                </TouchableOpacity>
+                {userId && (
+                  <TouchableOpacity
+                    onPress={handleSeedDemo}
+                    disabled={isSeeding}
+                    style={styles.seedDemoButton}
+                  >
+                    {isSeeding ? (
+                      <ActivityIndicator size="small" color={Colors.info} />
+                    ) : (
+                      <>
+                        <Ionicons name="sparkles" size={18} color={Colors.info} />
+                        <Text style={styles.seedDemoButtonText}>Charger démos</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          ) : (
+            <View style={styles.challengesList}>
+              {filteredChallenges.slice(0, 10).map((challenge: any, index: number) => (
+                <Animated.View
+                  key={challenge._id}
+                  entering={FadeInUp.delay(220 + index * 40).springify()}
+                >
+                  <TouchableOpacity
+                    onPress={() => handleJoinChallenge(challenge._id)}
+                    style={styles.challengeCard}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.challengeMain}>
+                      <Text style={styles.challengeTitle} numberOfLines={2}>
+                        {challenge.title}
+                      </Text>
+                      <View style={styles.challengeMeta}>
+                        <View style={styles.categoryBadge}>
+                          <Text style={styles.challengeCategory}>
+                            {getCategoryName(challenge.category)}
+                          </Text>
+                        </View>
+                        <View style={styles.participantsBadge}>
+                          <Ionicons name="people" size={12} color={Colors.info} />
+                          <Text style={styles.participantsText}>
+                            {challenge.currentParticipants || 0}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.challengeRight}>
+                      <Text style={styles.challengeBet}>{challenge.minBet}€</Text>
+                      <View style={styles.joinArrow}>
+                        <Ionicons name="arrow-forward" size={20} color={Colors.black} />
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </Animated.View>
+              ))}
+            </View>
+          )}
+        </Animated.View>
+
+        {/* 3. PACTS POPULAIRES - Horizontal scroll (Inspiration) */}
+        <Animated.View entering={FadeInDown.delay(260).springify()} style={styles.popularSection}>
           <View style={styles.sectionHeader}>
             <Ionicons name="flame" size={18} color={Colors.danger} />
-            <Text style={styles.sectionTitle}>PACTS POPULAIRES</Text>
+            <Text style={styles.sectionTitle}>IDÉES POPULAIRES</Text>
+            <View style={styles.inspirationBadge}>
+              <Text style={styles.inspirationBadgeText}>Inspiration</Text>
+            </View>
           </View>
           <ScrollView
             horizontal
@@ -346,9 +448,10 @@ export default function ExploreScreen() {
             {POPULAR_CHALLENGES.map((challenge, index) => (
               <Animated.View
                 key={challenge.id}
-                entering={FadeInRight.delay(220 + index * 35).springify()}
+                entering={FadeInRight.delay(280 + index * 35).springify()}
               >
                 <TouchableOpacity
+                  onPress={() => router.push({ pathname: "/create-challenge", params: { title: challenge.title, category: challenge.category, minBet: challenge.minBet } })}
                   style={styles.popularCard}
                   activeOpacity={0.85}
                 >
@@ -667,6 +770,71 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     color: Colors.success,
+  },
+  // Community Section
+  communitySection: {
+    marginBottom: Spacing.xxl,
+  },
+  emptyCard: {
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xxl,
+    marginHorizontal: Spacing.xl,
+    alignItems: "center",
+    gap: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  emptyCardText: {
+    ...Typography.bodyMedium,
+    color: Colors.textTertiary,
+    textAlign: "center",
+  },
+  emptyCardActions: {
+    flexDirection: "row",
+    gap: Spacing.md,
+    marginTop: Spacing.md,
+  },
+  seedDemoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.infoMuted,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.full,
+    gap: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.info,
+  },
+  seedDemoButtonText: {
+    ...Typography.labelMedium,
+    color: Colors.info,
+  },
+  createPactButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.accent,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.full,
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  createPactButtonText: {
+    ...Typography.labelMedium,
+    color: Colors.black,
+  },
+  inspirationBadge: {
+    backgroundColor: Colors.dangerMuted,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+    marginLeft: "auto",
+  },
+  inspirationBadgeText: {
+    ...Typography.labelSmall,
+    color: Colors.danger,
+    fontSize: 10,
   },
   // Popular Section - Horizontal
   popularSection: {
