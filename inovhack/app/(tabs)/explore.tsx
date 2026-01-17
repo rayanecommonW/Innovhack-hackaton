@@ -347,92 +347,8 @@ export default function ExploreScreen() {
           </ScrollView>
         </Animated.View>
 
-        {/* 2. PACTS COMMUNAUTAIRES - Real joinable pacts */}
-        <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.communitySection}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="globe" size={18} color={Colors.info} />
-            <Text style={styles.sectionTitle}>PACTS COMMUNAUTAIRES</Text>
-          </View>
-
-          {challenges === undefined ? (
-            <ActivityIndicator color={Colors.info} style={{ padding: Spacing.lg }} />
-          ) : filteredChallenges.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Ionicons name="rocket-outline" size={32} color={Colors.accent} />
-              <Text style={styles.emptyCardText}>
-                Aucun pact disponible pour le moment
-              </Text>
-              <View style={styles.emptyCardActions}>
-                <TouchableOpacity
-                  onPress={() => router.push("/create-challenge")}
-                  style={styles.createPactButton}
-                >
-                  <Ionicons name="add" size={18} color={Colors.black} />
-                  <Text style={styles.createPactButtonText}>Créer un pact</Text>
-                </TouchableOpacity>
-                {userId && (
-                  <TouchableOpacity
-                    onPress={handleSeedDemo}
-                    disabled={isSeeding}
-                    style={styles.seedDemoButton}
-                  >
-                    {isSeeding ? (
-                      <ActivityIndicator size="small" color={Colors.info} />
-                    ) : (
-                      <>
-                        <Ionicons name="sparkles" size={18} color={Colors.info} />
-                        <Text style={styles.seedDemoButtonText}>Charger démos</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          ) : (
-            <View style={styles.challengesList}>
-              {filteredChallenges.slice(0, 10).map((challenge: any, index: number) => (
-                <Animated.View
-                  key={challenge._id}
-                  entering={FadeInUp.delay(220 + index * 40).springify()}
-                >
-                  <TouchableOpacity
-                    onPress={() => handleJoinChallenge(challenge._id)}
-                    style={styles.challengeCard}
-                    activeOpacity={0.85}
-                  >
-                    <View style={styles.challengeMain}>
-                      <Text style={styles.challengeTitle} numberOfLines={2}>
-                        {challenge.title}
-                      </Text>
-                      <View style={styles.challengeMeta}>
-                        <View style={styles.categoryBadge}>
-                          <Text style={styles.challengeCategory}>
-                            {getCategoryName(challenge.category)}
-                          </Text>
-                        </View>
-                        <View style={styles.participantsBadge}>
-                          <Ionicons name="people" size={12} color={Colors.info} />
-                          <Text style={styles.participantsText}>
-                            {challenge.currentParticipants || 0}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                    <View style={styles.challengeRight}>
-                      <Text style={styles.challengeBet}>{challenge.minBet}€</Text>
-                      <View style={styles.joinArrow}>
-                        <Ionicons name="arrow-forward" size={20} color={Colors.black} />
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                </Animated.View>
-              ))}
-            </View>
-          )}
-        </Animated.View>
-
-        {/* 3. PACTS POPULAIRES - Horizontal scroll (Inspiration) */}
-        <Animated.View entering={FadeInDown.delay(260).springify()} style={styles.popularSection}>
+        {/* 2. IDÉES POPULAIRES - Horizontal scroll */}
+        <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.popularSection}>
           <View style={styles.sectionHeader}>
             <Ionicons name="flame" size={18} color={Colors.danger} />
             <Text style={styles.sectionTitle}>IDÉES POPULAIRES</Text>
@@ -480,7 +396,91 @@ export default function ExploreScreen() {
           </ScrollView>
         </Animated.View>
 
-        {/* 3. PACTS DE MES AMIS - Third section */}
+        {/* 3. PACTS COMMUNAUTAIRES - Real joinable pacts */}
+        <Animated.View entering={FadeInDown.delay(260).springify()} style={styles.communitySection}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="globe" size={18} color={Colors.info} />
+            <Text style={styles.sectionTitle}>PACTS COMMUNAUTAIRES</Text>
+          </View>
+
+          {challenges === undefined ? (
+            <ActivityIndicator color={Colors.info} style={{ padding: Spacing.lg }} />
+          ) : filteredChallenges.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Ionicons name="rocket-outline" size={32} color={Colors.accent} />
+              <Text style={styles.emptyCardText}>
+                Aucun pact disponible pour le moment
+              </Text>
+              <View style={styles.emptyCardActions}>
+                <TouchableOpacity
+                  onPress={() => router.push("/create-challenge")}
+                  style={styles.createPactButton}
+                >
+                  <Ionicons name="add" size={18} color={Colors.black} />
+                  <Text style={styles.createPactButtonText}>Créer un pact</Text>
+                </TouchableOpacity>
+                {userId && (
+                  <TouchableOpacity
+                    onPress={handleSeedDemo}
+                    disabled={isSeeding}
+                    style={styles.seedDemoButton}
+                  >
+                    {isSeeding ? (
+                      <ActivityIndicator size="small" color={Colors.info} />
+                    ) : (
+                      <>
+                        <Ionicons name="sparkles" size={18} color={Colors.info} />
+                        <Text style={styles.seedDemoButtonText}>Charger démos</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          ) : (
+            <View style={styles.challengesList}>
+              {filteredChallenges.slice(0, 10).map((challenge: any, index: number) => (
+                <Animated.View
+                  key={challenge._id}
+                  entering={FadeInUp.delay(280 + index * 40).springify()}
+                >
+                  <TouchableOpacity
+                    onPress={() => handleJoinChallenge(challenge._id)}
+                    style={styles.challengeCard}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.challengeMain}>
+                      <Text style={styles.challengeTitle} numberOfLines={2}>
+                        {challenge.title}
+                      </Text>
+                      <View style={styles.challengeMeta}>
+                        <View style={styles.categoryBadge}>
+                          <Text style={styles.challengeCategory}>
+                            {getCategoryName(challenge.category)}
+                          </Text>
+                        </View>
+                        <View style={styles.participantsBadge}>
+                          <Ionicons name="people" size={12} color={Colors.info} />
+                          <Text style={styles.participantsText}>
+                            {challenge.currentParticipants || 0}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.challengeRight}>
+                      <Text style={styles.challengeBet}>{challenge.minBet}€</Text>
+                      <View style={styles.joinArrow}>
+                        <Ionicons name="arrow-forward" size={20} color={Colors.black} />
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </Animated.View>
+              ))}
+            </View>
+          )}
+        </Animated.View>
+
+        {/* 4. PACTS DE MES AMIS */}
         <Animated.View entering={FadeInDown.delay(260).springify()} style={styles.friendsSection}>
           <View style={styles.sectionHeader}>
             <Ionicons name="people" size={18} color={Colors.info} />
