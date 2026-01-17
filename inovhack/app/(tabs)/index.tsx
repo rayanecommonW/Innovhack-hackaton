@@ -1,6 +1,5 @@
 import { Redirect } from 'expo-router';
 
-// Redirect to home tab - this file is hidden in navigation
-export default function Index() {
+export default function TabsIndex() {
   return <Redirect href="/(tabs)/home" />;
 }

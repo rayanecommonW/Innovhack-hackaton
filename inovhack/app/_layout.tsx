@@ -2,6 +2,8 @@ import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
+import { ConvexProvider } from '../providers/ConvexProvider';
+import { AuthProvider } from '../providers/AuthProvider';
 
 // Custom dark theme for full black look
 const BetBuddyTheme = {
@@ -17,18 +19,24 @@ const BetBuddyTheme = {
 };
 
 export const unstable_settings = {
-  anchor: '(tabs)',
   initialRouteName: '(tabs)',
 };
 
 export default function RootLayout() {
   return (
-    <ThemeProvider value={BetBuddyTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="light" />
-    </ThemeProvider>
+    <ConvexProvider>
+      <AuthProvider>
+        <ThemeProvider value={BetBuddyTheme}>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="auth" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="create-challenge" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="join-challenge" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="submit-proof" options={{ presentation: 'modal' }} />
+          </Stack>
+          <StatusBar style="light" />
+        </ThemeProvider>
+      </AuthProvider>
+    </ConvexProvider>
   );
 }
