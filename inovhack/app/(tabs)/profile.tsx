@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,8 @@ import { api } from "../../convex/_generated/api";
 import { useAuth } from "../../providers/AuthProvider";
 import { router } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import AddFundsModal from "../../components/AddFundsModal";
+import { getCategoryName } from "../../constants/categories";
 import {
   Colors,
   Spacing,
@@ -23,10 +25,16 @@ import {
 } from "../../constants/theme";
 
 export default function ProfileScreen() {
-  const { user, userId, logout, isLoading } = useAuth();
+  const { user, userId, logout, isLoading, refreshUser } = useAuth();
+  const [showAddFunds, setShowAddFunds] = useState(false);
 
   const participations = useQuery(
     api.participations.getMyParticipations,
+    userId ? { userId } : "skip"
+  );
+
+  const proofsToVote = useQuery(
+    api.votes.getProofsToVote,
     userId ? { userId } : "skip"
   );
 
@@ -48,6 +56,10 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleSubmitProof = (participationId: string) => {
+    router.push({ pathname: "/submit-proof", params: { participationId } });
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -58,7 +70,7 @@ export default function ProfileScreen() {
     );
   }
 
-  if (!user) {
+  if (!user || !userId) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
@@ -78,6 +90,9 @@ export default function ProfileScreen() {
   const wonCount = participations?.filter((p: any) => p.status === "won").length || 0;
   const totalBets = participations?.length || 0;
   const winRate = totalBets > 0 ? Math.round((wonCount / totalBets) * 100) : 0;
+
+  // Filter active participations (not yet won or lost)
+  const activePacts = participations?.filter((p: any) => p.status === "active") || [];
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -101,6 +116,13 @@ export default function ProfileScreen() {
         <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Solde</Text>
           <Text style={styles.balanceAmount}>{user.balance.toFixed(2)}€</Text>
+          <TouchableOpacity
+            onPress={() => setShowAddFunds(true)}
+            style={styles.addFundsButton}
+          >
+            <Ionicons name="add" size={20} color={Colors.black} />
+            <Text style={styles.addFundsText}>Ajouter</Text>
+          </TouchableOpacity>
         </Animated.View>
 
         {/* Stats */}
@@ -121,6 +143,84 @@ export default function ProfileScreen() {
           </View>
         </Animated.View>
 
+        {/* Community Proofs to Vote - Always visible */}
+        <Animated.View entering={FadeInDown.delay(165).springify()}>
+          <TouchableOpacity
+            onPress={() => router.push("/community-proofs")}
+            style={[
+              styles.communityProofsCard,
+              proofsToVote && proofsToVote.length > 0
+                ? styles.communityProofsCardActive
+                : styles.communityProofsCardEmpty
+            ]}
+            activeOpacity={0.8}
+          >
+            <View style={styles.communityProofsLeft}>
+              <View style={[
+                styles.communityProofsIcon,
+                proofsToVote && proofsToVote.length > 0 && styles.communityProofsIconActive
+              ]}>
+                <Ionicons
+                  name="people"
+                  size={24}
+                  color={proofsToVote && proofsToVote.length > 0 ? Colors.info : Colors.textTertiary}
+                />
+              </View>
+              <View>
+                <Text style={styles.communityProofsTitle}>Validation communautaire</Text>
+                <Text style={[
+                  styles.communityProofsSubtitle,
+                  proofsToVote && proofsToVote.length > 0
+                    ? styles.communityProofsSubtitleActive
+                    : styles.communityProofsSubtitleEmpty
+                ]}>
+                  {proofsToVote && proofsToVote.length > 0
+                    ? `${proofsToVote.length} preuve${proofsToVote.length > 1 ? "s" : ""} en attente`
+                    : "Aucune preuve a valider"
+                  }
+                </Text>
+              </View>
+            </View>
+            {proofsToVote && proofsToVote.length > 0 ? (
+              <View style={styles.communityProofsBadge}>
+                <Text style={styles.communityProofsBadgeText}>{proofsToVote.length}</Text>
+              </View>
+            ) : (
+              <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
+            )}
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Active Pacts - This is the missing link! */}
+        {activePacts.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(180).springify()} style={styles.activePactsSection}>
+            <Text style={styles.sectionTitle}>MES PACTS ACTIFS</Text>
+            <View style={styles.pactsList}>
+              {activePacts.map((pact: any) => (
+                <View key={pact._id} style={styles.pactCard}>
+                  <View style={styles.pactMain}>
+                    <Text style={styles.pactTitle} numberOfLines={1}>
+                      {pact.challenge?.title || "Pact"}
+                    </Text>
+                    <Text style={styles.pactCategory}>
+                      {pact.challenge?.category ? getCategoryName(pact.challenge.category) : ""}
+                    </Text>
+                  </View>
+                  <View style={styles.pactRight}>
+                    <Text style={styles.pactBet}>{pact.betAmount}€</Text>
+                    <TouchableOpacity
+                      onPress={() => handleSubmitProof(pact._id)}
+                      style={styles.submitProofButton}
+                    >
+                      <Ionicons name="camera" size={18} color={Colors.black} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </Animated.View>
+        )}
+
         {/* Logout */}
         <Animated.View entering={FadeInDown.delay(200).springify()}>
           <TouchableOpacity
@@ -135,6 +235,14 @@ export default function ProfileScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Add Funds Modal */}
+      <AddFundsModal
+        visible={showAddFunds}
+        onClose={() => setShowAddFunds(false)}
+        userId={userId}
+        onSuccess={refreshUser}
+      />
     </SafeAreaView>
   );
 }
@@ -218,13 +326,27 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: "700",
     color: Colors.accent,
+    marginBottom: Spacing.lg,
+  },
+  addFundsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.textPrimary,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.full,
+    gap: Spacing.xs,
+  },
+  addFundsText: {
+    ...Typography.labelMedium,
+    color: Colors.black,
   },
   statsRow: {
     flexDirection: "row",
     backgroundColor: Colors.surfaceElevated,
     borderRadius: BorderRadius.xl,
     padding: Spacing.lg,
-    marginBottom: Spacing.xxl,
+    marginBottom: Spacing.xl,
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -244,6 +366,117 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     backgroundColor: Colors.border,
+  },
+  // Community Proofs Card
+  communityProofsCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    marginBottom: Spacing.xl,
+    borderWidth: 1,
+  },
+  communityProofsCardActive: {
+    backgroundColor: Colors.infoMuted,
+    borderColor: Colors.info,
+  },
+  communityProofsCardEmpty: {
+    backgroundColor: Colors.surfaceElevated,
+    borderColor: Colors.border,
+  },
+  communityProofsLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  communityProofsIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.surfaceHighlight,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  communityProofsIconActive: {
+    backgroundColor: Colors.surfaceElevated,
+  },
+  communityProofsTitle: {
+    ...Typography.labelLarge,
+    color: Colors.textPrimary,
+  },
+  communityProofsSubtitle: {
+    ...Typography.bodySmall,
+    marginTop: Spacing.xs,
+  },
+  communityProofsSubtitleActive: {
+    color: Colors.info,
+  },
+  communityProofsSubtitleEmpty: {
+    color: Colors.textTertiary,
+  },
+  communityProofsBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.info,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  communityProofsBadgeText: {
+    ...Typography.labelMedium,
+    color: Colors.textPrimary,
+  },
+  // Active Pacts Section
+  activePactsSection: {
+    marginBottom: Spacing.xl,
+  },
+  sectionTitle: {
+    ...Typography.labelSmall,
+    color: Colors.textTertiary,
+    letterSpacing: 1,
+    marginBottom: Spacing.md,
+  },
+  pactsList: {
+    gap: Spacing.sm,
+  },
+  pactCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  pactMain: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  pactTitle: {
+    ...Typography.labelLarge,
+    color: Colors.textPrimary,
+  },
+  pactCategory: {
+    ...Typography.bodySmall,
+    color: Colors.textTertiary,
+  },
+  pactRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  pactBet: {
+    ...Typography.labelLarge,
+    color: Colors.accent,
+  },
+  submitProofButton: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.accent,
+    justifyContent: "center",
+    alignItems: "center",
   },
   logoutButton: {
     flexDirection: "row",

@@ -21,6 +21,7 @@ interface AuthContextType {
   login: (email: string) => Promise<boolean>;
   signup: (name: string, email: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  refreshUser: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -86,6 +87,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Convex auto-refreshes, this is for explicit refresh calls
+  const refreshUser = () => {
+    // No-op: Convex useQuery automatically updates
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -96,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         signup,
         logout,
+        refreshUser,
       }}
     >
       {children}

@@ -10,11 +10,13 @@
 
 import type * as ai from "../ai.js";
 import type * as challenges from "../challenges.js";
+import type * as files from "../files.js";
 import type * as participations from "../participations.js";
 import type * as proofs from "../proofs.js";
 import type * as rewards from "../rewards.js";
 import type * as seed from "../seed.js";
 import type * as users from "../users.js";
+import type * as votes from "../votes.js";
 
 import type {
   ApiFromModules,
@@ -25,11 +27,13 @@ import type {
 declare const fullApi: ApiFromModules<{
   ai: typeof ai;
   challenges: typeof challenges;
+  files: typeof files;
   participations: typeof participations;
   proofs: typeof proofs;
   rewards: typeof rewards;
   seed: typeof seed;
   users: typeof users;
+  votes: typeof votes;
 }>;
 
 /**

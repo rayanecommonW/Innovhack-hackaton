@@ -269,6 +269,86 @@ function getHardcodedChallenges(category: string) {
   return challenges[category] || defaultChallenges;
 }
 
+// Sélectionner automatiquement la catégorie basée sur le titre du défi
+export async function selectCategoryFromTitle(
+  title: string,
+  availableCategories: { id: string; name: string }[]
+): Promise<string> {
+  const categoryList = availableCategories
+    .map((c) => `${c.id}: ${c.name}`)
+    .join("\n");
+
+  const prompt = `Tu dois déterminer la catégorie la plus appropriée pour ce défi.
+
+Titre du défi: "${title}"
+
+Catégories disponibles:
+${categoryList}
+
+Réponds UNIQUEMENT avec l'ID de la catégorie (ex: "running", "meditation", "coding").
+Pas de texte supplémentaire, juste l'ID.`;
+
+  try {
+    const response = await callAI([
+      { role: "system", content: "Tu réponds uniquement avec l'ID de catégorie demandé, sans explication." },
+      { role: "user", content: prompt },
+    ]);
+
+    const categoryId = response.trim().toLowerCase().replace(/['"]/g, "");
+
+    // Vérifier que la catégorie existe
+    const exists = availableCategories.some((c) => c.id === categoryId);
+    if (exists) {
+      return categoryId;
+    }
+
+    // Fallback: chercher une correspondance partielle
+    const partial = availableCategories.find((c) =>
+      categoryId.includes(c.id) || c.id.includes(categoryId)
+    );
+    if (partial) {
+      return partial.id;
+    }
+
+    return "other";
+  } catch {
+    return "other";
+  }
+}
+
+// Générer les critères de preuve basé sur le titre uniquement
+export async function generateProofFromTitle(title: string): Promise<{
+  proofType: string;
+  proofDescription: string;
+  proofValidationCriteria: string;
+}> {
+  const prompt = `Tu dois déterminer comment valider ce défi basé sur son titre.
+
+Titre du défi: "${title}"
+
+Détermine:
+- proofType: type de preuve ("screenshot", "photo", "number", "text")
+- proofDescription: ce que l'utilisateur doit fournir (ex: "Photo de vous en train de courir")
+- proofValidationCriteria: critère de validation (ex: "La photo doit montrer l'activité en cours")
+
+Réponds UNIQUEMENT avec un JSON object valide.`;
+
+  const response = await callAI([
+    { role: "system", content: "Tu réponds uniquement en JSON valide." },
+    { role: "user", content: prompt },
+  ]);
+
+  try {
+    return JSON.parse(response);
+  } catch {
+    return {
+      proofType: "photo",
+      proofDescription: "Photo ou screenshot prouvant que tu as réalisé le défi",
+      proofValidationCriteria: "La preuve doit montrer clairement la réalisation du défi",
+    };
+  }
+}
+
 // Codes promo sponsors hardcodés
 export const SPONSOR_PROMOS: Record<
   string,

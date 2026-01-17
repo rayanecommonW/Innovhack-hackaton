@@ -10,6 +10,7 @@ import {
   Platform,
   Alert,
   StyleSheet,
+  Share,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +19,8 @@ import { api } from "../convex/_generated/api";
 import { useAuth } from "../providers/AuthProvider";
 import { router } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import CategoryPickerModal from "../components/CategoryPickerModal";
+import { CATEGORIES, getCategoryName } from "../constants/categories";
 import {
   Colors,
   Spacing,
@@ -25,25 +28,40 @@ import {
   Typography,
 } from "../constants/theme";
 
-const categories = [
-  { id: "sport", name: "Sport" },
-  { id: "procrastination", name: "Productivité" },
-  { id: "screen_time", name: "Screen Time" },
-  { id: "social", name: "Social" },
-];
+type PactType = "public" | "friends";
 
 export default function CreateChallengeScreen() {
   const { userId } = useAuth();
-  const createChallenge = useAction(api.challenges.createChallengeWithAI);
+  const createPact = useAction(api.challenges.createPactSimple);
+  const autoSelectCategory = useAction(api.challenges.autoSelectCategory);
 
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("sport");
-  const [goal, setGoal] = useState("");
-  const [goalValue, setGoalValue] = useState("");
-  const [goalUnit, setGoalUnit] = useState("");
+  const [category, setCategory] = useState<string | null>(null);
+  const [pactType, setPactType] = useState<PactType>("public");
   const [minBet, setMinBet] = useState("10");
   const [durationDays, setDurationDays] = useState("7");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAutoSelecting, setIsAutoSelecting] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [createdInviteCode, setCreatedInviteCode] = useState<string | null>(null);
+
+  // Auto-select category when title changes (with debounce via blur)
+  const handleTitleBlur = async () => {
+    if (!title.trim() || title.length < 3) return;
+
+    setIsAutoSelecting(true);
+    try {
+      const selectedCategory = await autoSelectCategory({
+        title: title.trim(),
+        categories: CATEGORIES,
+      });
+      setCategory(selectedCategory);
+    } catch (err) {
+      // Fallback silently
+    } finally {
+      setIsAutoSelecting(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!userId) {
@@ -51,33 +69,87 @@ export default function CreateChallengeScreen() {
       return;
     }
 
-    if (!title.trim() || !goal.trim() || !goalValue || !goalUnit.trim()) {
-      Alert.alert("Erreur", "Remplis tous les champs");
+    if (!title.trim()) {
+      Alert.alert("Erreur", "Ajoute un titre");
+      return;
+    }
+
+    if (!category) {
+      Alert.alert("Erreur", "Choisis une catégorie");
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      await createChallenge({
+      const result = await createPact({
         title: title.trim(),
-        description: title.trim(),
         category,
-        type: "public",
+        type: pactType,
         creatorId: userId,
-        goal: goal.trim(),
-        goalValue: parseInt(goalValue),
-        goalUnit: goalUnit.trim(),
         minBet: parseInt(minBet) || 10,
         durationDays: parseInt(durationDays) || 7,
       });
-      router.back();
+
+      // If friends pact, show invite code
+      if (result.inviteCode) {
+        setCreatedInviteCode(result.inviteCode);
+      } else {
+        router.back();
+      }
     } catch (err) {
       Alert.alert("Erreur", "Erreur lors de la création");
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const handleShareCode = async () => {
+    if (!createdInviteCode) return;
+
+    try {
+      await Share.share({
+        message: `Rejoins mon Pact "${title}" avec le code: ${createdInviteCode}`,
+      });
+    } catch (err) {
+      // Ignore
+    }
+  };
+
+  const handleDone = () => {
+    setCreatedInviteCode(null);
+    router.back();
+  };
+
+  // Success screen with invite code
+  if (createdInviteCode) {
+    return (
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <View style={styles.successContainer}>
+          <Animated.View entering={FadeInDown.springify()} style={styles.successContent}>
+            <View style={styles.successIcon}>
+              <Ionicons name="checkmark-circle" size={64} color={Colors.success} />
+            </View>
+            <Text style={styles.successTitle}>Pact créé</Text>
+            <Text style={styles.successSubtitle}>Partage ce code avec tes amis</Text>
+
+            <View style={styles.codeContainer}>
+              <Text style={styles.codeText}>{createdInviteCode}</Text>
+            </View>
+
+            <TouchableOpacity onPress={handleShareCode} style={styles.shareButton}>
+              <Ionicons name="share-outline" size={20} color={Colors.black} />
+              <Text style={styles.shareButtonText}>Partager</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={handleDone} style={styles.doneButton}>
+              <Text style={styles.doneButtonText}>Terminé</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -104,78 +176,71 @@ export default function CreateChallengeScreen() {
             <Text style={styles.inputLabel}>TITRE</Text>
             <TextInput
               style={styles.input}
-              placeholder="Ex: 10K Steps Challenge"
+              placeholder="Ex: Courir 5km chaque jour"
               placeholderTextColor={Colors.textTertiary}
               value={title}
               onChangeText={setTitle}
+              onBlur={handleTitleBlur}
             />
           </Animated.View>
 
           {/* Category */}
           <Animated.View entering={FadeInDown.delay(120).springify()} style={styles.inputGroup}>
             <Text style={styles.inputLabel}>CATÉGORIE</Text>
-            <View style={styles.categoryRow}>
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => setCategory(cat.id)}
-                  style={[
-                    styles.categoryChip,
-                    category === cat.id && styles.categoryChipSelected,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.categoryText,
-                      category === cat.id && styles.categoryTextSelected,
-                    ]}
-                  >
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <TouchableOpacity
+              onPress={() => setShowCategoryModal(true)}
+              style={styles.categoryButton}
+            >
+              {isAutoSelecting ? (
+                <ActivityIndicator size="small" color={Colors.textTertiary} />
+              ) : category ? (
+                <Text style={styles.categoryButtonText}>
+                  {getCategoryName(category)}
+                </Text>
+              ) : (
+                <Text style={styles.categoryButtonPlaceholder}>
+                  99+ catégories...
+                </Text>
+              )}
+              <Ionicons name="chevron-down" size={20} color={Colors.textTertiary} />
+            </TouchableOpacity>
           </Animated.View>
 
-          {/* Goal */}
+          {/* Type (Public/Friends) - Icons only */}
           <Animated.View entering={FadeInDown.delay(140).springify()} style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>OBJECTIF</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Ex: Faire 10000 pas par jour"
-              placeholderTextColor={Colors.textTertiary}
-              value={goal}
-              onChangeText={setGoal}
-            />
-          </Animated.View>
-
-          {/* Goal Value & Unit */}
-          <Animated.View entering={FadeInDown.delay(160).springify()} style={styles.rowInputs}>
-            <View style={styles.halfInput}>
-              <Text style={styles.inputLabel}>VALEUR</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="10000"
-                placeholderTextColor={Colors.textTertiary}
-                value={goalValue}
-                onChangeText={setGoalValue}
-                keyboardType="numeric"
-              />
-            </View>
-            <View style={styles.halfInput}>
-              <Text style={styles.inputLabel}>UNITÉ</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="pas"
-                placeholderTextColor={Colors.textTertiary}
-                value={goalUnit}
-                onChangeText={setGoalUnit}
-              />
+            <Text style={styles.inputLabel}>TYPE</Text>
+            <View style={styles.typeRow}>
+              <TouchableOpacity
+                onPress={() => setPactType("public")}
+                style={[
+                  styles.typeButton,
+                  pactType === "public" && styles.typeButtonSelected,
+                ]}
+              >
+                <Ionicons
+                  name="globe-outline"
+                  size={28}
+                  color={pactType === "public" ? Colors.black : Colors.textSecondary}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setPactType("friends")}
+                style={[
+                  styles.typeButton,
+                  pactType === "friends" && styles.typeButtonSelected,
+                ]}
+              >
+                <Ionicons
+                  name="people-outline"
+                  size={28}
+                  color={pactType === "friends" ? Colors.black : Colors.textSecondary}
+                />
+              </TouchableOpacity>
             </View>
           </Animated.View>
 
           {/* Min Bet & Duration */}
-          <Animated.View entering={FadeInDown.delay(180).springify()} style={styles.rowInputs}>
+          <Animated.View entering={FadeInDown.delay(160).springify()} style={styles.rowInputs}>
             <View style={styles.halfInput}>
               <Text style={styles.inputLabel}>MISE MIN (€)</Text>
               <TextInput
@@ -201,7 +266,7 @@ export default function CreateChallengeScreen() {
           </Animated.View>
 
           {/* Submit */}
-          <Animated.View entering={FadeInDown.delay(200).springify()}>
+          <Animated.View entering={FadeInDown.delay(180).springify()}>
             <TouchableOpacity
               onPress={handleSubmit}
               disabled={isSubmitting}
@@ -210,7 +275,7 @@ export default function CreateChallengeScreen() {
               {isSubmitting ? (
                 <ActivityIndicator color={Colors.black} />
               ) : (
-                <Text style={styles.submitButtonText}>Créer le Pact</Text>
+                <Text style={styles.submitButtonText}>Créer</Text>
               )}
             </TouchableOpacity>
           </Animated.View>
@@ -218,6 +283,14 @@ export default function CreateChallengeScreen() {
           <View style={styles.bottomSpacer} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Category Picker Modal */}
+      <CategoryPickerModal
+        visible={showCategoryModal}
+        onClose={() => setShowCategoryModal(false)}
+        onSelect={setCategory}
+        selectedCategory={category}
+      />
     </SafeAreaView>
   );
 }
@@ -276,29 +349,42 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  categoryRow: {
+  categoryButton: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
-  },
-  categoryChip: {
+    alignItems: "center",
+    justifyContent: "space-between",
     backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.lg,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.full,
+    paddingVertical: Spacing.lg,
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  categoryChipSelected: {
+  categoryButtonText: {
+    ...Typography.bodyMedium,
+    color: Colors.textPrimary,
+  },
+  categoryButtonPlaceholder: {
+    ...Typography.bodyMedium,
+    color: Colors.textTertiary,
+  },
+  typeRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  typeButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.surfaceElevated,
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  typeButtonSelected: {
     backgroundColor: Colors.textPrimary,
     borderColor: Colors.textPrimary,
-  },
-  categoryText: {
-    ...Typography.labelMedium,
-    color: Colors.textSecondary,
-  },
-  categoryTextSelected: {
-    color: Colors.black,
   },
   rowInputs: {
     flexDirection: "row",
@@ -324,5 +410,67 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 40,
+  },
+  // Success screen styles
+  successContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: Spacing.xl,
+  },
+  successContent: {
+    alignItems: "center",
+    width: "100%",
+  },
+  successIcon: {
+    marginBottom: Spacing.xl,
+  },
+  successTitle: {
+    ...Typography.headlineLarge,
+    color: Colors.textPrimary,
+    marginBottom: Spacing.sm,
+  },
+  successSubtitle: {
+    ...Typography.bodyMedium,
+    color: Colors.textTertiary,
+    marginBottom: Spacing.xxl,
+  },
+  codeContainer: {
+    backgroundColor: Colors.surfaceElevated,
+    paddingVertical: Spacing.xl,
+    paddingHorizontal: Spacing.xxl,
+    borderRadius: BorderRadius.xl,
+    marginBottom: Spacing.xl,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  codeText: {
+    fontSize: 36,
+    fontWeight: "700",
+    color: Colors.accent,
+    letterSpacing: 8,
+  },
+  shareButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.textPrimary,
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.xxl,
+    borderRadius: BorderRadius.lg,
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+    width: "100%",
+  },
+  shareButtonText: {
+    ...Typography.labelLarge,
+    color: Colors.black,
+  },
+  doneButton: {
+    paddingVertical: Spacing.lg,
+  },
+  doneButtonText: {
+    ...Typography.labelMedium,
+    color: Colors.textTertiary,
   },
 });

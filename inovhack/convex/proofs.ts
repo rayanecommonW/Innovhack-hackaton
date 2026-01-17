@@ -33,6 +33,9 @@ export const submitProof = mutation({
       proofContent: args.proofContent,
       proofValue: args.proofValue,
       aiValidation: "pending",
+      communityValidation: "pending",
+      approveCount: 0,
+      vetoCount: 0,
       submittedAt: Date.now(),
     });
   },

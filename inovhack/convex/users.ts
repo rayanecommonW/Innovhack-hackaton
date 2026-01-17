@@ -66,6 +66,50 @@ export const updateBalance = mutation({
   },
 });
 
+// Ajouter des fonds (dépôt)
+export const addFunds = mutation({
+  args: {
+    userId: v.id("users"),
+    amount: v.number(),
+    method: v.string(), // "card", "crypto", "apple_pay", "google_pay"
+    reference: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) throw new Error("Utilisateur non trouvé");
+    if (args.amount <= 0) throw new Error("Montant invalide");
+
+    // Créer la transaction
+    await ctx.db.insert("transactions", {
+      userId: args.userId,
+      amount: args.amount,
+      type: "deposit",
+      method: args.method,
+      status: "completed",
+      reference: args.reference,
+      createdAt: Date.now(),
+    });
+
+    // Mettre à jour le solde
+    const newBalance = user.balance + args.amount;
+    await ctx.db.patch(args.userId, { balance: newBalance });
+
+    return { newBalance, transactionId: args.reference };
+  },
+});
+
+// Historique des transactions
+export const getTransactions = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("transactions")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .take(20);
+  },
+});
+
 // Lister tous les utilisateurs (pour la démo)
 export const listUsers = query({
   handler: async (ctx) => {
