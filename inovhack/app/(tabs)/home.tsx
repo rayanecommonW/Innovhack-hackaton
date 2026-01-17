@@ -152,8 +152,8 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <Animated.View style={[styles.welcomeContainer, welcomeContainerStyle]}>
-          {/* Logo with dramatic entrance */}
-          <Animated.View entering={BounceIn.delay(100).duration(800)}>
+          {/* Logo with smooth zoom entrance */}
+          <Animated.View entering={ZoomIn.delay(200).duration(600).springify()}>
             <Image
               source={require("../../assets/images/logo_big.png")}
               style={styles.logoImage}
@@ -161,16 +161,16 @@ export default function HomeScreen() {
             />
           </Animated.View>
 
-          {/* Tagline with staggered fade */}
+          {/* Tagline appears right after logo */}
           <Animated.Text
-            entering={FadeInUp.delay(400).duration(600).springify()}
+            entering={FadeInDown.delay(500).duration(400).springify()}
             style={styles.tagline}
           >
             Engage. Parie. Gagne.
           </Animated.Text>
 
-          {/* CTA button centered */}
-          <Animated.View entering={FadeInUp.delay(700).duration(500).springify()}>
+          {/* CTA button slides up last */}
+          <Animated.View entering={FadeInUp.delay(800).duration(400).springify()}>
             <TouchableOpacity
               onPress={handleCommencer}
               style={styles.authButton}
@@ -458,9 +458,9 @@ const styles = StyleSheet.create({
     letterSpacing: 12,
   },
   logoImage: {
-    width: 200,
-    height: 200,
-    marginBottom: Spacing.lg,
+    width: 220,
+    height: 220,
+    marginBottom: Spacing.xl,
   },
   loadingDots: {
     flexDirection: "row",
