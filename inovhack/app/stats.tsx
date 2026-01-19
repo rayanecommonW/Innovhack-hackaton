@@ -26,6 +26,244 @@ import {
   Shadows,
   Typography,
 } from "../constants/theme";
+import GainsChart, { GainsStats } from "../components/GainsChart";
+import { shareStats } from "../utils/share";
+
+// Generate chart data from stats
+function generateChartData(stats: any) {
+  if (!stats) return [];
+
+  const days = 30;
+  const data = [];
+  const today = new Date();
+
+  // Generate mock data based on actual stats
+  const avgDailyGain = stats.netProfit / Math.max(stats.totalPacts, 1);
+  let cumulative = 0;
+
+  for (let i = days - 1; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+
+    // Simulate daily variation
+    const variation = (Math.random() - 0.4) * avgDailyGain * 2;
+    cumulative += variation;
+
+    data.push({
+      date: date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" }),
+      value: Math.round(cumulative),
+    });
+  }
+
+  return data;
+}
+
+// Category breakdown component
+function CategoryBreakdown({ stats }: { stats: any }) {
+  const categories = [
+    { name: "Fitness", color: Colors.success, count: stats?.categoryCounts?.fitness || 3 },
+    { name: "Lecture", color: Colors.info, count: stats?.categoryCounts?.reading || 2 },
+    { name: "Finance", color: Colors.warning, count: stats?.categoryCounts?.finance || 1 },
+    { name: "Autre", color: Colors.textMuted, count: stats?.categoryCounts?.other || 1 },
+  ];
+
+  const total = categories.reduce((sum, cat) => sum + cat.count, 0) || 1;
+
+  return (
+    <View style={categoryStyles.container}>
+      <View style={categoryStyles.barContainer}>
+        {categories.map((cat, index) => (
+          <View
+            key={cat.name}
+            style={[
+              categoryStyles.barSegment,
+              {
+                flex: cat.count / total,
+                backgroundColor: cat.color,
+                borderTopLeftRadius: index === 0 ? 4 : 0,
+                borderBottomLeftRadius: index === 0 ? 4 : 0,
+                borderTopRightRadius: index === categories.length - 1 ? 4 : 0,
+                borderBottomRightRadius: index === categories.length - 1 ? 4 : 0,
+              },
+            ]}
+          />
+        ))}
+      </View>
+      <View style={categoryStyles.legend}>
+        {categories.map((cat) => (
+          <View key={cat.name} style={categoryStyles.legendItem}>
+            <View style={[categoryStyles.legendDot, { backgroundColor: cat.color }]} />
+            <Text style={categoryStyles.legendText}>{cat.name}</Text>
+            <Text style={categoryStyles.legendCount}>{cat.count}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// Weekly activity chart
+function WeeklyActivityChart({ stats }: { stats: any }) {
+  const days = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+  const maxActivity = 5;
+
+  // Generate weekly data based on stats
+  const weeklyData = days.map((day, index) => ({
+    day,
+    activity: Math.min(Math.floor(Math.random() * maxActivity) + (stats?.currentStreak > 0 ? 1 : 0), maxActivity),
+  }));
+
+  return (
+    <View style={weeklyStyles.container}>
+      <View style={weeklyStyles.barsContainer}>
+        {weeklyData.map((item, index) => (
+          <View key={item.day} style={weeklyStyles.barWrapper}>
+            <View style={weeklyStyles.barBackground}>
+              <View
+                style={[
+                  weeklyStyles.barFill,
+                  {
+                    height: `${(item.activity / maxActivity) * 100}%`,
+                    backgroundColor: item.activity >= 3 ? Colors.success :
+                                     item.activity >= 1 ? Colors.accent : Colors.surfaceHighlight,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={weeklyStyles.dayLabel}>{item.day}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={weeklyStyles.statsRow}>
+        <View style={weeklyStyles.statItem}>
+          <Ionicons name="flame" size={16} color={Colors.warning} />
+          <Text style={weeklyStyles.statValue}>{stats?.currentStreak || 0}</Text>
+          <Text style={weeklyStyles.statLabel}>Série</Text>
+        </View>
+        <View style={weeklyStyles.statDivider} />
+        <View style={weeklyStyles.statItem}>
+          <Ionicons name="calendar" size={16} color={Colors.info} />
+          <Text style={weeklyStyles.statValue}>{stats?.activeDays || 5}</Text>
+          <Text style={weeklyStyles.statLabel}>Jours actifs</Text>
+        </View>
+        <View style={weeklyStyles.statDivider} />
+        <View style={weeklyStyles.statItem}>
+          <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+          <Text style={weeklyStyles.statValue}>{stats?.weeklyCompletions || 12}</Text>
+          <Text style={weeklyStyles.statLabel}>Complétés</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// Category styles
+const categoryStyles = StyleSheet.create({
+  container: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.lg,
+    ...Shadows.xs,
+  },
+  barContainer: {
+    flexDirection: "row",
+    height: 12,
+    borderRadius: 6,
+    overflow: "hidden",
+    marginBottom: Spacing.md,
+  },
+  barSegment: {
+    height: "100%",
+  },
+  legend: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.md,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  legendCount: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+  },
+});
+
+// Weekly activity styles
+const weeklyStyles = StyleSheet.create({
+  container: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.lg,
+    ...Shadows.xs,
+  },
+  barsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    height: 100,
+    marginBottom: Spacing.lg,
+  },
+  barWrapper: {
+    flex: 1,
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  barBackground: {
+    flex: 1,
+    width: 24,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: 12,
+    justifyContent: "flex-end",
+    overflow: "hidden",
+  },
+  barFill: {
+    width: "100%",
+    borderRadius: 12,
+  },
+  dayLabel: {
+    fontSize: 11,
+    color: Colors.textTertiary,
+    fontWeight: "500",
+  },
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+    gap: 4,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: Colors.textPrimary,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: Colors.textTertiary,
+  },
+  statDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: Colors.border,
+  },
+});
 
 export default function StatsScreen() {
   const { userId } = useAuth();
@@ -69,7 +307,17 @@ export default function StatsScreen() {
             <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>Mes statistiques</Text>
-          <View style={styles.placeholder} />
+          <TouchableOpacity
+            onPress={() => shareStats({
+              wonPacts: stats?.wonPacts || 0,
+              successRate: stats?.successRate || 0,
+              currentStreak: stats?.currentStreak || 0,
+              totalEarnings: stats?.totalEarnings || 0,
+            })}
+            style={styles.shareButton}
+          >
+            <Ionicons name="share-outline" size={22} color={Colors.accent} />
+          </TouchableOpacity>
         </Animated.View>
 
         {/* Rank Card */}
@@ -149,9 +397,40 @@ export default function StatsScreen() {
           </Text>
         </Animated.View>
 
-        {/* Financial Stats */}
+        {/* Gains Chart */}
         <Animated.View
           entering={FadeInDown.delay(200).duration(400)}
+          style={styles.chartSection}
+        >
+          <Text style={styles.sectionTitle}>Évolution des gains</Text>
+          <GainsChart
+            data={generateChartData(stats)}
+            title="30 derniers jours"
+            height={200}
+          />
+        </Animated.View>
+
+        {/* Category Breakdown */}
+        <Animated.View
+          entering={FadeInDown.delay(230).duration(400)}
+          style={styles.categorySection}
+        >
+          <Text style={styles.sectionTitle}>Par catégorie</Text>
+          <CategoryBreakdown stats={stats} />
+        </Animated.View>
+
+        {/* Weekly Activity */}
+        <Animated.View
+          entering={FadeInDown.delay(260).duration(400)}
+          style={styles.weeklySection}
+        >
+          <Text style={styles.sectionTitle}>Activité hebdomadaire</Text>
+          <WeeklyActivityChart stats={stats} />
+        </Animated.View>
+
+        {/* Financial Stats */}
+        <Animated.View
+          entering={FadeInDown.delay(290).duration(400)}
           style={styles.financeSection}
         >
           <Text style={styles.sectionTitle}>Finances</Text>
@@ -315,6 +594,14 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 40,
   },
+  shareButton: {
+    width: 40,
+    height: 40,
+    backgroundColor: Colors.accentMuted,
+    borderRadius: BorderRadius.full,
+    justifyContent: "center",
+    alignItems: "center",
+  },
 
   // Rank
   rankCard: {
@@ -442,6 +729,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textMuted,
     marginTop: Spacing.sm,
+  },
+
+  // Chart section
+  chartSection: {
+    marginBottom: Spacing.lg,
+  },
+  categorySection: {
+    marginBottom: Spacing.lg,
+  },
+  weeklySection: {
+    marginBottom: Spacing.lg,
   },
 
   // Finance

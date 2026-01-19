@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
+  RefreshControl,
   StyleSheet,
   Modal,
   Alert,
@@ -60,6 +61,12 @@ export default function GroupsScreen() {
   const [taskBet, setTaskBet] = useState("5");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFriends, setSelectedFriends] = useState<Id<"users">[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 1000);
+  }, []);
 
   const groups = useQuery(
     api.groups.getMyGroups,
@@ -207,6 +214,13 @@ export default function GroupsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.accent}
+          />
+        }
       >
         {/* Header */}
         <Animated.View entering={FadeInDown.delay(50).duration(400)} style={styles.header}>

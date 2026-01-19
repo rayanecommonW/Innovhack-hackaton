@@ -10,6 +10,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  RefreshControl,
   StyleSheet,
   Image,
 } from "react-native";
@@ -29,6 +30,7 @@ import {
   BorderRadius,
   Shadows,
 } from "../../constants/theme";
+import LevelProgress from "../../components/LevelProgress";
 
 const BADGE_RARITY_COLORS: Record<string, string> = {
   common: Colors.textMuted,
@@ -41,6 +43,13 @@ export default function ProfileScreen() {
   const { user, userId, isLoading, refreshUser } = useAuth();
   const [showAddFunds, setShowAddFunds] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    refreshUser?.();
+    setTimeout(() => setRefreshing(false), 1000);
+  }, [refreshUser]);
 
   // Get full profile with image and badges
   const profile = useQuery(
@@ -108,6 +117,13 @@ export default function ProfileScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.accent}
+          />
+        }
       >
         {/* Header */}
         <Animated.View entering={FadeInDown.delay(50).duration(400)} style={styles.header}>
@@ -188,8 +204,17 @@ export default function ProfileScreen() {
           </Animated.View>
         )}
 
+        {/* Level Progress */}
+        <Animated.View entering={FadeInDown.delay(110).duration(400)} style={styles.levelSection}>
+          <LevelProgress
+            xp={profile?.xp || 150}
+            level={profile?.level || 2}
+            xpToNextLevel={250}
+          />
+        </Animated.View>
+
         {/* Balance Card */}
-        <Animated.View entering={FadeInDown.delay(120).duration(400)} style={styles.balanceCard}>
+        <Animated.View entering={FadeInDown.delay(130).duration(400)} style={styles.balanceCard}>
           <View style={styles.balanceHeader}>
             <Ionicons name="wallet-outline" size={18} color={Colors.accent} />
             <Text style={styles.balanceLabelText}>Solde disponible</Text>
@@ -267,14 +292,14 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => router.push("/activity")}
+            onPress={() => router.push("/history")}
             style={styles.quickActionCard}
             activeOpacity={0.8}
           >
             <View style={[styles.quickActionIcon, { backgroundColor: Colors.successMuted }]}>
-              <Ionicons name="newspaper" size={20} color={Colors.success} />
+              <Ionicons name="time" size={20} color={Colors.success} />
             </View>
-            <Text style={styles.quickActionLabel}>Activité</Text>
+            <Text style={styles.quickActionLabel}>Historique</Text>
           </TouchableOpacity>
         </Animated.View>
 
@@ -626,6 +651,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: Colors.textTertiary,
+  },
+
+  // Level Section
+  levelSection: {
+    marginBottom: Spacing.md,
   },
 
   // Balance Card

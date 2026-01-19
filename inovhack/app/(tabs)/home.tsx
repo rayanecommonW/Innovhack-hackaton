@@ -14,6 +14,7 @@ import {
   TextInput,
   Alert,
   ScrollView,
+  RefreshControl,
   Dimensions,
   KeyboardAvoidingView,
   Platform,
@@ -82,6 +83,12 @@ export default function HomeScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 1000);
+  }, []);
 
   const participations = useQuery(
     api.participations.getMyParticipations,
@@ -193,6 +200,13 @@ export default function HomeScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.accent}
+          />
+        }
       >
         {/* Header */}
         <Animated.View entering={FadeInDown.delay(50).duration(400)} style={styles.header}>

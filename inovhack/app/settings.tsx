@@ -31,9 +31,17 @@ import {
   BorderRadius,
   Shadows,
 } from "../constants/theme";
+import { useTheme, ThemeMode } from "../providers/ThemeProvider";
+
+const THEME_OPTIONS: { key: ThemeMode; label: string; icon: string }[] = [
+  { key: "system", label: "Système", icon: "phone-portrait-outline" },
+  { key: "light", label: "Clair", icon: "sunny-outline" },
+  { key: "dark", label: "Sombre", icon: "moon-outline" },
+];
 
 export default function SettingsScreen() {
   const { userId, logout } = useAuth();
+  const { mode, setTheme, isDark } = useTheme();
 
   const user = useQuery(
     api.users.getCurrentUser,
@@ -250,6 +258,41 @@ export default function SettingsScreen() {
             </View>
           </Animated.View>
 
+          {/* Appearance */}
+          <Animated.View entering={FadeInDown.delay(175).duration(400)} style={styles.section}>
+            <Text style={styles.sectionTitle}>Apparence</Text>
+
+            <View style={styles.themeSelector}>
+              {THEME_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option.key}
+                  onPress={() => setTheme(option.key)}
+                  style={[
+                    styles.themeOption,
+                    mode === option.key && styles.themeOptionActive,
+                  ]}
+                >
+                  <View style={[
+                    styles.themeIconBox,
+                    mode === option.key && styles.themeIconBoxActive,
+                  ]}>
+                    <Ionicons
+                      name={option.icon as any}
+                      size={20}
+                      color={mode === option.key ? Colors.white : Colors.textSecondary}
+                    />
+                  </View>
+                  <Text style={[
+                    styles.themeLabel,
+                    mode === option.key && styles.themeLabelActive,
+                  ]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Animated.View>
+
           {/* Links */}
           <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.section}>
             <Text style={styles.sectionTitle}>Confidentialité</Text>
@@ -454,6 +497,45 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
     fontSize: 15,
+    color: Colors.textPrimary,
+  },
+
+  // Theme Selector
+  themeSelector: {
+    flexDirection: "row",
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    gap: Spacing.sm,
+    ...Shadows.xs,
+  },
+  themeOption: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    gap: Spacing.xs,
+  },
+  themeOptionActive: {
+    backgroundColor: Colors.surfaceHighlight,
+  },
+  themeIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceHighlight,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  themeIconBoxActive: {
+    backgroundColor: Colors.accent,
+  },
+  themeLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: Colors.textTertiary,
+  },
+  themeLabelActive: {
     color: Colors.textPrimary,
   },
 
