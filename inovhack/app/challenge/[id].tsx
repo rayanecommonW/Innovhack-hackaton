@@ -44,6 +44,7 @@ export default function ChallengeDetailScreen() {
   const { userId } = useAuth();
   const [copiedCode, setCopiedCode] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isDistributing, setIsDistributing] = useState(false);
   const [hasShownConfetti, setHasShownConfetti] = useState(false);
   const confettiRef = useRef<ConfettiRef>(null);
 
@@ -57,13 +58,21 @@ export default function ChallengeDetailScreen() {
     id ? { challengeId: id as Id<"challenges"> } : "skip"
   );
 
+  const distributionPreview = useQuery(
+    api.payout.previewDistribution,
+    id ? { challengeId: id as Id<"challenges"> } : "skip"
+  );
+
   const deleteChallenge = useMutation(api.challenges.deleteChallenge);
+  const finalizeChallenge = useMutation(api.payout.finalizeChallenge);
+  const distributeRewards = useMutation(api.payout.distributeRewards);
 
   const isCreator = challenge?.creatorId === userId;
   const userParticipation = participations?.find((p) => p.usertId === userId);
   const isParticipant = !!userParticipation;
   const hasWon = userParticipation?.status === "won";
   const canDelete = isCreator && (!participations || participations.length === 0);
+  const canDistribute = isCreator && challenge?.status === "active" && challenge?.endDate && challenge.endDate < Date.now();
 
   // Trigger confetti if user won this challenge
   useEffect(() => {
@@ -130,6 +139,59 @@ export default function ChallengeDetailScreen() {
               Alert.alert("Erreur", error.message || "Impossible de supprimer ce pact");
             } finally {
               setIsDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDistribute = () => {
+    const preview = distributionPreview;
+    if (!preview) return;
+
+    const commissionText = `Commission PACT: ${preview.commissionRate}% (${preview.financials.commission.toFixed(2)}€)`;
+    const winnersText = preview.winnersPreviews.length > 0
+      ? preview.winnersPreviews.map((w) => `• ${w.name}: ${w.betAmount}€ → ${w.estimatedTotal.toFixed(2)}€ (+${w.estimatedEarnings.toFixed(2)}€)`).join("\n")
+      : "Aucun gagnant";
+
+    Alert.alert(
+      "Distribuer les gains",
+      `Cagnotte perdants: ${preview.financials.losersPot}€\n${commissionText}\nÀ distribuer: ${preview.financials.distributablePot.toFixed(2)}€\n\nGagnants:\n${winnersText}\n\nConfirmer la distribution ?`,
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Finaliser d'abord",
+          onPress: async () => {
+            if (!id) return;
+            setIsDistributing(true);
+            try {
+              await finalizeChallenge({ challengeId: id as Id<"challenges"> });
+              Alert.alert("Succès", "Participations finalisées. Relance la distribution.");
+            } catch (error: any) {
+              Alert.alert("Erreur", error.message);
+            } finally {
+              setIsDistributing(false);
+            }
+          },
+        },
+        {
+          text: "Distribuer",
+          style: "default",
+          onPress: async () => {
+            if (!id) return;
+            setIsDistributing(true);
+            try {
+              // Finaliser d'abord (marquer les actifs comme perdants)
+              await finalizeChallenge({ challengeId: id as Id<"challenges"> });
+              // Puis distribuer
+              const result = await distributeRewards({ challengeId: id as Id<"challenges"> });
+              Alert.alert("Succès", result.message || "Distribution effectuée !");
+              confettiRef.current?.fire();
+            } catch (error: any) {
+              Alert.alert("Erreur", error.message || "Impossible de distribuer");
+            } finally {
+              setIsDistributing(false);
             }
           },
         },
@@ -386,6 +448,105 @@ export default function ChallengeDetailScreen() {
               <View style={styles.promoCodeBox}>
                 <Text style={styles.promoCodeLabel}>Code promo:</Text>
                 <Text style={styles.promoCode}>{challenge.sponsorPromoCode}</Text>
+              </View>
+            )}
+          </Animated.View>
+        )}
+
+        {/* Distribution Preview - For creator when challenge can be finalized */}
+        {isCreator && distributionPreview && participations && participations.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(360).duration(400)} style={styles.distributionCard}>
+            <View style={styles.distributionHeader}>
+              <Ionicons name="pie-chart" size={20} color={Colors.accent} />
+              <Text style={styles.sectionTitle}>Redistribution</Text>
+              <View style={styles.commissionBadge}>
+                <Text style={styles.commissionBadgeText}>
+                  {distributionPreview.commissionRate}% commission
+                </Text>
+              </View>
+            </View>
+
+            {/* Stats */}
+            <View style={styles.distributionStats}>
+              <View style={styles.distributionStatItem}>
+                <Text style={styles.distributionStatValue}>{distributionPreview.status.winners}</Text>
+                <Text style={styles.distributionStatLabel}>Gagnants</Text>
+              </View>
+              <View style={styles.distributionStatDivider} />
+              <View style={styles.distributionStatItem}>
+                <Text style={styles.distributionStatValue}>{distributionPreview.status.losers}</Text>
+                <Text style={styles.distributionStatLabel}>Perdants</Text>
+              </View>
+              <View style={styles.distributionStatDivider} />
+              <View style={styles.distributionStatItem}>
+                <Text style={styles.distributionStatValue}>{distributionPreview.status.active}</Text>
+                <Text style={styles.distributionStatLabel}>En cours</Text>
+              </View>
+            </View>
+
+            {/* Financials */}
+            <View style={styles.distributionFinancials}>
+              <View style={styles.financialRow}>
+                <Text style={styles.financialLabel}>Cagnotte perdants</Text>
+                <Text style={styles.financialValue}>{distributionPreview.financials.losersPot}€</Text>
+              </View>
+              <View style={styles.financialRow}>
+                <Text style={styles.financialLabel}>Commission PACT ({distributionPreview.commissionRate}%)</Text>
+                <Text style={[styles.financialValue, { color: Colors.accent }]}>
+                  -{distributionPreview.financials.commission.toFixed(2)}€
+                </Text>
+              </View>
+              <View style={[styles.financialRow, styles.financialRowTotal]}>
+                <Text style={styles.financialLabelBold}>À distribuer</Text>
+                <Text style={styles.financialValueBold}>
+                  {distributionPreview.financials.distributablePot.toFixed(2)}€
+                </Text>
+              </View>
+            </View>
+
+            {/* Winners Preview */}
+            {distributionPreview.winnersPreviews.length > 0 && (
+              <View style={styles.winnersPreview}>
+                <Text style={styles.winnersPreviewTitle}>Gains estimés</Text>
+                {distributionPreview.winnersPreviews.map((winner, index) => (
+                  <View key={index} style={styles.winnerPreviewItem}>
+                    <Text style={styles.winnerName}>{winner.name}</Text>
+                    <View style={styles.winnerAmounts}>
+                      <Text style={styles.winnerBet}>{winner.betAmount}€</Text>
+                      <Ionicons name="arrow-forward" size={14} color={Colors.textMuted} />
+                      <Text style={styles.winnerTotal}>{winner.estimatedTotal.toFixed(2)}€</Text>
+                      <Text style={styles.winnerEarnings}>(+{winner.estimatedEarnings.toFixed(2)}€)</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Distribute Button */}
+            {canDistribute && (
+              <TouchableOpacity
+                style={styles.distributeButton}
+                onPress={handleDistribute}
+                disabled={isDistributing}
+                activeOpacity={0.8}
+              >
+                {isDistributing ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <>
+                    <Ionicons name="cash" size={20} color={Colors.white} />
+                    <Text style={styles.distributeButtonText}>Distribuer les gains</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+
+            {!canDistribute && challenge?.status === "active" && (
+              <View style={styles.distributionNote}>
+                <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
+                <Text style={styles.distributionNoteText}>
+                  Distribution disponible après la fin du pact
+                </Text>
               </View>
             )}
           </Animated.View>
@@ -806,6 +967,160 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: Colors.warning,
+  },
+
+  // Distribution Card
+  distributionCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
+    ...Shadows.sm,
+  },
+  distributionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  commissionBadge: {
+    marginLeft: "auto",
+    backgroundColor: Colors.accentMuted,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  commissionBadgeText: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: Colors.accent,
+  },
+  distributionStats: {
+    flexDirection: "row",
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  distributionStatItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  distributionStatValue: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: Colors.textPrimary,
+  },
+  distributionStatLabel: {
+    fontSize: 11,
+    color: Colors.textTertiary,
+    marginTop: 2,
+  },
+  distributionStatDivider: {
+    width: 1,
+    backgroundColor: Colors.border,
+    marginHorizontal: Spacing.sm,
+  },
+  distributionFinancials: {
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  financialRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  financialRowTotal: {
+    paddingTop: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    marginTop: Spacing.xs,
+  },
+  financialLabel: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  financialLabelBold: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+  },
+  financialValue: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.textPrimary,
+  },
+  financialValueBold: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: Colors.success,
+  },
+  winnersPreview: {
+    backgroundColor: Colors.successMuted,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  winnersPreviewTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.success,
+    marginBottom: Spacing.sm,
+  },
+  winnerPreviewItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: Spacing.xs,
+  },
+  winnerName: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: Colors.textPrimary,
+    flex: 1,
+  },
+  winnerAmounts: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+  },
+  winnerBet: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  winnerTotal: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.success,
+  },
+  winnerEarnings: {
+    fontSize: 11,
+    color: Colors.success,
+  },
+  distributeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.success,
+    borderRadius: BorderRadius.lg,
+    paddingVertical: Spacing.md,
+    gap: Spacing.sm,
+  },
+  distributeButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: Colors.white,
+  },
+  distributionNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm,
+  },
+  distributionNoteText: {
+    fontSize: 12,
+    color: Colors.textMuted,
   },
 
   // Action Bar

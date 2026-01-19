@@ -20,6 +20,7 @@ import type * as groups from "../groups.js";
 import type * as maintenance from "../maintenance.js";
 import type * as notifications from "../notifications.js";
 import type * as participations from "../participations.js";
+import type * as payout from "../payout.js";
 import type * as proofs from "../proofs.js";
 import type * as pushNotifications from "../pushNotifications.js";
 import type * as referrals from "../referrals.js";
@@ -49,6 +50,7 @@ declare const fullApi: ApiFromModules<{
   maintenance: typeof maintenance;
   notifications: typeof notifications;
   participations: typeof participations;
+  payout: typeof payout;
   proofs: typeof proofs;
   pushNotifications: typeof pushNotifications;
   referrals: typeof referrals;
