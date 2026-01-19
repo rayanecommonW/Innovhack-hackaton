@@ -3,7 +3,7 @@
  * LUMA-inspired: clean, elegant history view
  */
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -27,6 +27,7 @@ import {
   Shadows,
 } from "../constants/theme";
 import { SkeletonList } from "../components/SkeletonLoader";
+import ConfettiCelebration, { ConfettiRef } from "../components/ConfettiCelebration";
 
 type FilterType = "all" | "won" | "lost" | "completed";
 
@@ -68,6 +69,8 @@ export default function HistoryScreen() {
   const { userId } = useAuth();
   const [filter, setFilter] = useState<FilterType>("all");
   const [refreshing, setRefreshing] = useState(false);
+  const [hasShownConfetti, setHasShownConfetti] = useState(false);
+  const confettiRef = useRef<ConfettiRef>(null);
 
   const participations = useQuery(
     api.participations.getMyParticipations,
@@ -78,6 +81,21 @@ export default function HistoryScreen() {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 1000);
   }, []);
+
+  // Trigger confetti when user has won pacts
+  useEffect(() => {
+    if (participations && !hasShownConfetti) {
+      const hasWonPacts = participations.some((p: any) => p.status === "won");
+      if (hasWonPacts) {
+        // Delay confetti for smooth animation
+        const timer = setTimeout(() => {
+          confettiRef.current?.fire();
+          setHasShownConfetti(true);
+        }, 600);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [participations, hasShownConfetti]);
 
   // Filter only finished pacts
   const finishedPacts = participations?.filter((p: any) =>
@@ -110,6 +128,9 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      {/* Confetti celebration for wins */}
+      <ConfettiCelebration ref={confettiRef} />
+
       {/* Header */}
       <Animated.View entering={FadeInDown.delay(50).duration(400)} style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>

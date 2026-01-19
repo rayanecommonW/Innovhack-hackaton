@@ -51,6 +51,7 @@ import StatsCard from "../../components/StatsCard";
 import StreakCalendar from "../../components/StreakCalendar";
 import ActivityFeed from "../../components/ActivityFeed";
 import Countdown from "../../components/Countdown";
+import MyCreatedPacts from "../../components/MyCreatedPacts";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -347,62 +348,74 @@ export default function HomeScreen() {
           </Animated.View>
         )}
 
+        {/* My Created Pacts */}
+        {userId && (
+          <Animated.View entering={FadeInDown.delay(250).duration(400)} style={styles.createdPactsSection}>
+            <MyCreatedPacts userId={userId} limit={2} />
+          </Animated.View>
+        )}
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
       {/* Join Modal */}
       <Modal
         visible={showJoinModal}
-        animationType="slide"
+        animationType="fade"
         transparent
         onRequestClose={handleCloseModal}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
-        >
+        <View style={styles.modalOverlay}>
           <Pressable style={styles.modalBackdrop} onPress={handleCloseModal} />
-          <Animated.View entering={SlideInDown} style={styles.modalContent}>
-            <View style={styles.modalHandle} />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalKeyboardView}
+            keyboardVerticalOffset={0}
+          >
+            <Animated.View entering={SlideInDown} style={styles.modalContent}>
+              <View style={styles.modalHandle} />
 
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Code d'invitation</Text>
-              <TouchableOpacity onPress={handleCloseModal} style={styles.modalClose}>
-                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Code d'invitation</Text>
+                <TouchableOpacity onPress={handleCloseModal} style={styles.modalClose}>
+                  <Ionicons name="close" size={24} color={Colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalSub}>Entre le code à 6 chiffres de ton ami</Text>
+
+              <View style={styles.codeBox}>
+                <TextInput
+                  style={styles.codeInput}
+                  placeholder="000000"
+                  placeholderTextColor={Colors.textLight}
+                  value={inviteCode}
+                  onChangeText={(text) => setInviteCode(text.replace(/[^0-9]/g, "").slice(0, 6))}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  autoFocus
+                />
+              </View>
+
+              <TouchableOpacity
+                onPress={handleJoinByCode}
+                disabled={isSearching || inviteCode.length !== 6}
+                style={[
+                  styles.modalSubmit,
+                  (isSearching || inviteCode.length !== 6) && styles.modalSubmitDisabled,
+                ]}
+              >
+                {isSearching ? (
+                  <ActivityIndicator color={Colors.white} />
+                ) : (
+                  <Text style={styles.modalSubmitText}>Rejoindre</Text>
+                )}
               </TouchableOpacity>
-            </View>
 
-            <Text style={styles.modalSub}>Entre le code à 6 chiffres de ton ami</Text>
-
-            <View style={styles.codeBox}>
-              <TextInput
-                style={styles.codeInput}
-                placeholder="000000"
-                placeholderTextColor={Colors.textLight}
-                value={inviteCode}
-                onChangeText={(text) => setInviteCode(text.replace(/[^0-9]/g, "").slice(0, 6))}
-                keyboardType="number-pad"
-                maxLength={6}
-                autoFocus
-              />
-            </View>
-
-            <TouchableOpacity
-              onPress={handleJoinByCode}
-              disabled={isSearching || inviteCode.length !== 6}
-              style={[
-                styles.modalSubmit,
-                (isSearching || inviteCode.length !== 6) && styles.modalSubmitDisabled,
-              ]}
-            >
-              {isSearching ? (
-                <ActivityIndicator color={Colors.white} />
-              ) : (
-                <Text style={styles.modalSubmitText}>Rejoindre</Text>
-              )}
-            </TouchableOpacity>
-          </Animated.View>
-        </KeyboardAvoidingView>
+              <View style={styles.modalBottomSpacer} />
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -646,6 +659,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  createdPactsSection: {
+    marginBottom: Spacing.lg,
+  },
   bottomSpacer: {
     height: 120,
   },
@@ -654,10 +670,12 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: Colors.overlay,
-    justifyContent: "flex-end",
   },
   modalBackdrop: {
     flex: 1,
+  },
+  modalKeyboardView: {
+    justifyContent: "flex-end",
   },
   modalContent: {
     backgroundColor: Colors.surface,
@@ -723,5 +741,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: Colors.white,
+  },
+  modalBottomSpacer: {
+    height: Platform.OS === "ios" ? 20 : 10,
   },
 });

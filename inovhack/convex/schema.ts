@@ -344,6 +344,18 @@ export default defineSchema({
     .index("by_user_friend", ["userId", "friendId"])
     .index("by_status", ["status"]),
 
+  // Messages de chat pour les pacts
+  messages: defineTable({
+    challengeId: v.id("challenges"),
+    userId: v.id("users"),
+    content: v.string(),
+    type: v.string(), // "text", "system", "image"
+    createdAt: v.number(),
+  })
+    .index("by_challenge", ["challengeId"])
+    .index("by_user", ["userId"])
+    .index("by_challenge_created", ["challengeId", "createdAt"]),
+
   // Leaderboard cache (mis à jour périodiquement)
   leaderboard: defineTable({
     userId: v.id("users"),

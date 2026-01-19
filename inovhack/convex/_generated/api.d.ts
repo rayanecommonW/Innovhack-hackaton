@@ -11,6 +11,7 @@
 import type * as ai from "../ai.js";
 import type * as badges from "../badges.js";
 import type * as challenges from "../challenges.js";
+import type * as chat from "../chat.js";
 import type * as crons from "../crons.js";
 import type * as feed from "../feed.js";
 import type * as files from "../files.js";
@@ -39,6 +40,7 @@ declare const fullApi: ApiFromModules<{
   ai: typeof ai;
   badges: typeof badges;
   challenges: typeof challenges;
+  chat: typeof chat;
   crons: typeof crons;
   feed: typeof feed;
   files: typeof files;

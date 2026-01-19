@@ -235,6 +235,55 @@ export const getMyChallenges = query({
   },
 });
 
+// Lister les défis créés par un utilisateur avec les participants
+export const getMyCreatedChallengesWithParticipants = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const challenges = await ctx.db
+      .query("challenges")
+      .withIndex("by_creator", (q) => q.eq("creatorId", args.userId))
+      .collect();
+
+    // Pour chaque challenge, récupérer les participants
+    const challengesWithParticipants = await Promise.all(
+      challenges.map(async (challenge) => {
+        const participations = await ctx.db
+          .query("participations")
+          .withIndex("by_challenge", (q) => q.eq("challengeId", challenge._id))
+          .collect();
+
+        // Récupérer les infos des utilisateurs
+        const participants = await Promise.all(
+          participations
+            .filter((p) => p.usertId) // Filter out participations without userId
+            .map(async (p) => {
+              const user = p.usertId ? await ctx.db.get(p.usertId) : null;
+              return {
+                participationId: p._id,
+                userId: p.usertId,
+                name: user?.name || "Anonyme",
+                username: user?.username,
+                profileImageUrl: user?.profileImageUrl,
+                betAmount: p.betAmount,
+                status: p.status,
+                joinedAt: p._creationTime,
+              };
+            })
+        );
+
+        return {
+          ...challenge,
+          participants,
+          participantCount: participants.length,
+          totalPot: participations.reduce((sum, p) => sum + p.betAmount, 0),
+        };
+      })
+    );
+
+    return challengesWithParticipants;
+  },
+});
+
 // Activer un défi (quand assez de participants)
 export const activateChallenge = mutation({
   args: { challengeId: v.id("challenges") },
@@ -248,6 +297,49 @@ export const completeChallenge = mutation({
   args: { challengeId: v.id("challenges") },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.challengeId, { status: "completed" });
+  },
+});
+
+// Supprimer un défi (seulement si aucun participant)
+export const deleteChallenge = mutation({
+  args: {
+    challengeId: v.id("challenges"),
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    // Vérifier que le défi existe
+    const challenge = await ctx.db.get(args.challengeId);
+    if (!challenge) throw new Error("Pact non trouvé");
+
+    // Vérifier que l'utilisateur est le créateur
+    if (challenge.creatorId !== args.userId) {
+      throw new Error("Seul le créateur peut supprimer ce pact");
+    }
+
+    // Vérifier qu'il n'y a pas de participants
+    const participations = await ctx.db
+      .query("participations")
+      .withIndex("by_challenge", (q) => q.eq("challengeId", args.challengeId))
+      .collect();
+
+    if (participations.length > 0) {
+      throw new Error("Impossible de supprimer un pact avec des participants");
+    }
+
+    // Supprimer les messages associés
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("by_challenge", (q) => q.eq("challengeId", args.challengeId))
+      .collect();
+
+    for (const message of messages) {
+      await ctx.db.delete(message._id);
+    }
+
+    // Supprimer le défi
+    await ctx.db.delete(args.challengeId);
+
+    return { success: true };
   },
 });
 

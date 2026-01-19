@@ -31,6 +31,7 @@ import {
   Shadows,
 } from "../../constants/theme";
 import LevelProgress from "../../components/LevelProgress";
+import MyCreatedPacts from "../../components/MyCreatedPacts";
 
 const BADGE_RARITY_COLORS: Record<string, string> = {
   common: Colors.textMuted,
@@ -466,6 +467,13 @@ export default function ProfileScreen() {
                 </Animated.View>
               ))}
             </View>
+          </Animated.View>
+        )}
+
+        {/* My Created Pacts */}
+        {userId && (
+          <Animated.View entering={FadeInDown.delay(320).duration(400)} style={styles.createdPactsSection}>
+            <MyCreatedPacts userId={userId} limit={3} />
           </Animated.View>
         )}
 
@@ -908,6 +916,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  createdPactsSection: {
+    marginTop: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
   bottomSpacer: {
     height: 120,
   },

@@ -134,13 +134,31 @@ const isContentAppropriate = (text: string): boolean => {
   return !BLOCKED_WORDS.some(word => lowerText.includes(word));
 };
 
+const BET_RANGES = [
+  { id: "all", label: "Toutes les mises", min: 0, max: Infinity },
+  { id: "small", label: "5€ - 15€", min: 5, max: 15 },
+  { id: "medium", label: "15€ - 30€", min: 15, max: 30 },
+  { id: "large", label: "30€ - 50€", min: 30, max: 50 },
+  { id: "xlarge", label: "50€+", min: 50, max: Infinity },
+];
+
+const SORT_OPTIONS = [
+  { id: "popular", label: "Populaire", icon: "flame-outline" },
+  { id: "newest", label: "Récent", icon: "time-outline" },
+  { id: "bet_low", label: "Mise ↑", icon: "trending-up-outline" },
+  { id: "bet_high", label: "Mise ↓", icon: "trending-down-outline" },
+];
+
 export default function ExploreScreen() {
   const { userId } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedBetRange, setSelectedBetRange] = useState("all");
+  const [selectedSort, setSelectedSort] = useState("popular");
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showFiltersExpanded, setShowFiltersExpanded] = useState(false);
 
   const challenges = useQuery(api.challenges.listPublicChallenges);
   const sponsoredChallenges = useQuery(api.challenges.listSponsoredChallenges);
@@ -169,9 +187,12 @@ export default function ExploreScreen() {
     setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
+  // Get current bet range
+  const currentBetRange = BET_RANGES.find(r => r.id === selectedBetRange) || BET_RANGES[0];
+
   // Filter challenges with content moderation
-  const filteredChallenges =
-    challenges?.filter((c: any) => {
+  const filteredChallenges = React.useMemo(() => {
+    let filtered = challenges?.filter((c: any) => {
       // Content moderation
       if (!isContentAppropriate(c.title) || !isContentAppropriate(c.description || "")) {
         return false;
@@ -183,8 +204,25 @@ export default function ExploreScreen() {
         .includes(searchQuery.toLowerCase());
       // Exclude sponsored challenges from regular list
       const isSponsored = !!c.sponsorName;
-      return matchesCategory && matchesSearch && !isSponsored;
+      // Bet range filter
+      const matchesBetRange = c.minBet >= currentBetRange.min && c.minBet <= currentBetRange.max;
+      return matchesCategory && matchesSearch && !isSponsored && matchesBetRange;
     }) || [];
+
+    // Sorting
+    if (selectedSort === "newest") {
+      filtered = [...filtered].sort((a: any, b: any) => (b._creationTime || 0) - (a._creationTime || 0));
+    } else if (selectedSort === "bet_low") {
+      filtered = [...filtered].sort((a: any, b: any) => a.minBet - b.minBet);
+    } else if (selectedSort === "bet_high") {
+      filtered = [...filtered].sort((a: any, b: any) => b.minBet - a.minBet);
+    } else {
+      // popular - sort by participants
+      filtered = [...filtered].sort((a: any, b: any) => (b.currentParticipants || 0) - (a.currentParticipants || 0));
+    }
+
+    return filtered;
+  }, [challenges, selectedCategory, searchQuery, currentBetRange, selectedSort]);
 
   // Filter sponsored challenges too
   const filteredSponsored = sponsoredChallenges?.filter((c: any) => {
@@ -261,23 +299,89 @@ export default function ExploreScreen() {
           </View>
         </Animated.View>
 
-        {/* Category Filter */}
-        <Animated.View entering={FadeInDown.delay(120).duration(400)} style={styles.categoryFilterRow}>
-          <TouchableOpacity
-            onPress={() => setShowCategoryModal(true)}
-            style={styles.categoryFilterButton}
-          >
-            <Ionicons name="options-outline" size={16} color={Colors.textSecondary} />
-            <Text style={styles.categoryFilterText}>
-              {selectedCategory ? getCategoryName(selectedCategory) : "Toutes les catégories"}
-            </Text>
-            <Ionicons name="chevron-down" size={16} color={Colors.textMuted} />
-          </TouchableOpacity>
-
-          {selectedCategory && (
-            <TouchableOpacity onPress={clearCategory} style={styles.clearCategoryButton}>
-              <Ionicons name="close" size={16} color={Colors.danger} />
+        {/* Filters Row */}
+        <Animated.View entering={FadeInDown.delay(120).duration(400)} style={styles.filtersSection}>
+          {/* Main Filters Row */}
+          <View style={styles.categoryFilterRow}>
+            <TouchableOpacity
+              onPress={() => setShowCategoryModal(true)}
+              style={[styles.filterChip, selectedCategory && styles.filterChipActive]}
+            >
+              <Ionicons name="grid-outline" size={14} color={selectedCategory ? Colors.accent : Colors.textSecondary} />
+              <Text style={[styles.filterChipText, selectedCategory && styles.filterChipTextActive]}>
+                {selectedCategory ? getCategoryName(selectedCategory) : "Catégorie"}
+              </Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setShowFiltersExpanded(!showFiltersExpanded)}
+              style={[styles.filterChip, (selectedBetRange !== "all" || selectedSort !== "popular") && styles.filterChipActive]}
+            >
+              <Ionicons name="funnel-outline" size={14} color={(selectedBetRange !== "all" || selectedSort !== "popular") ? Colors.accent : Colors.textSecondary} />
+              <Text style={[styles.filterChipText, (selectedBetRange !== "all" || selectedSort !== "popular") && styles.filterChipTextActive]}>
+                Filtres
+              </Text>
+              <Ionicons name={showFiltersExpanded ? "chevron-up" : "chevron-down"} size={14} color={Colors.textMuted} />
+            </TouchableOpacity>
+
+            {(selectedCategory || selectedBetRange !== "all" || selectedSort !== "popular") && (
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedCategory(null);
+                  setSelectedBetRange("all");
+                  setSelectedSort("popular");
+                }}
+                style={styles.clearAllButton}
+              >
+                <Ionicons name="close-circle" size={18} color={Colors.danger} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Expanded Filters */}
+          {showFiltersExpanded && (
+            <Animated.View entering={FadeInDown.duration(200)} style={styles.expandedFilters}>
+              {/* Bet Range */}
+              <View style={styles.filterGroup}>
+                <Text style={styles.filterGroupLabel}>Mise</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterOptions}>
+                  {BET_RANGES.map((range) => (
+                    <TouchableOpacity
+                      key={range.id}
+                      onPress={() => setSelectedBetRange(range.id)}
+                      style={[styles.filterOption, selectedBetRange === range.id && styles.filterOptionActive]}
+                    >
+                      <Text style={[styles.filterOptionText, selectedBetRange === range.id && styles.filterOptionTextActive]}>
+                        {range.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Sort */}
+              <View style={styles.filterGroup}>
+                <Text style={styles.filterGroupLabel}>Trier par</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterOptions}>
+                  {SORT_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                      key={option.id}
+                      onPress={() => setSelectedSort(option.id)}
+                      style={[styles.filterOption, selectedSort === option.id && styles.filterOptionActive]}
+                    >
+                      <Ionicons
+                        name={option.icon as any}
+                        size={14}
+                        color={selectedSort === option.id ? Colors.accent : Colors.textTertiary}
+                      />
+                      <Text style={[styles.filterOptionText, selectedSort === option.id && styles.filterOptionTextActive]}>
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </Animated.View>
           )}
         </Animated.View>
 
@@ -665,36 +769,83 @@ const styles = StyleSheet.create({
     padding: Spacing.xs,
   },
 
-  // Category Filter
+  // Filters Section
+  filtersSection: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
   categoryFilterRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.xl,
     gap: Spacing.sm,
   },
-  categoryFilterButton: {
+  filterChip: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-    gap: Spacing.sm,
+    gap: Spacing.xs,
     ...Shadows.xs,
   },
-  categoryFilterText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: Colors.textPrimary,
+  filterChipActive: {
+    backgroundColor: Colors.accentMuted,
+    borderWidth: 1,
+    borderColor: Colors.accent,
   },
-  clearCategoryButton: {
-    width: 32,
-    height: 32,
-    backgroundColor: Colors.dangerMuted,
-    borderRadius: BorderRadius.full,
-    justifyContent: "center",
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: Colors.textSecondary,
+  },
+  filterChipTextActive: {
+    color: Colors.accent,
+  },
+  clearAllButton: {
+    marginLeft: "auto",
+    padding: Spacing.xs,
+  },
+  expandedFilters: {
+    marginTop: Spacing.md,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    ...Shadows.sm,
+  },
+  filterGroup: {
+    marginBottom: Spacing.md,
+  },
+  filterGroupLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.textTertiary,
+    marginBottom: Spacing.sm,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  filterOptions: {
+    gap: Spacing.sm,
+  },
+  filterOption: {
+    flexDirection: "row",
     alignItems: "center",
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  filterOptionActive: {
+    backgroundColor: Colors.accentMuted,
+  },
+  filterOptionText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: Colors.textSecondary,
+  },
+  filterOptionTextActive: {
+    color: Colors.accent,
   },
 
   // Sections

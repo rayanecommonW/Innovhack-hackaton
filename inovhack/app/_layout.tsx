@@ -177,6 +177,27 @@ function InnerLayout() {
               animationDuration: 200,
             }}
           />
+          <Stack.Screen
+            name="my-pacts"
+            options={{
+              animation: 'slide_from_right',
+              animationDuration: 200,
+            }}
+          />
+          <Stack.Screen
+            name="challenge/[id]"
+            options={{
+              animation: 'slide_from_right',
+              animationDuration: 200,
+            }}
+          />
+          <Stack.Screen
+            name="chat/[id]"
+            options={{
+              animation: 'slide_from_right',
+              animationDuration: 200,
+            }}
+          />
         </Stack>
       </NavigationHandler>
       <StatusBar style={isDark ? "light" : "dark"} />
