@@ -1,3 +1,8 @@
+/**
+ * Groups Screen - Clean & Minimal
+ * Inspired by Luma's elegant simplicity
+ */
+
 import React, { useState } from "react";
 import {
   View,
@@ -10,7 +15,6 @@ import {
   Modal,
   Alert,
   Share,
-  Dimensions,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -26,19 +30,14 @@ import Animated, {
   FadeInDown,
   FadeInUp,
   SlideInDown,
-  ZoomIn,
   FadeIn,
-  BounceIn,
 } from "react-native-reanimated";
 import {
   Colors,
   Spacing,
   BorderRadius,
-  Typography,
   Shadows,
 } from "../../constants/theme";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const FREQUENCY_LABELS: Record<string, string> = {
   daily: "Quotidien",
@@ -185,20 +184,17 @@ export default function GroupsScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          <Animated.View entering={BounceIn.delay(100)}>
-            <Ionicons name="people" size={64} color={Colors.textTertiary} />
-          </Animated.View>
-          <Animated.Text entering={FadeIn.delay(200)} style={styles.emptyTitle}>
-            Connecte-toi
-          </Animated.Text>
-          <Animated.View entering={FadeInUp.delay(300)}>
-            <TouchableOpacity
-              onPress={() => router.push("/auth")}
-              style={styles.authButton}
-            >
-              <Text style={styles.authButtonText}>Se connecter</Text>
-            </TouchableOpacity>
-          </Animated.View>
+          <View style={styles.loginIconBox}>
+            <Ionicons name="people-outline" size={32} color={Colors.textTertiary} />
+          </View>
+          <Text style={styles.loginTitle}>Connexion requise</Text>
+          <Text style={styles.loginSubtitle}>Connecte-toi pour accéder aux groupes</Text>
+          <TouchableOpacity
+            onPress={() => router.push("/auth")}
+            style={styles.loginButton}
+          >
+            <Text style={styles.loginButtonText}>Se connecter</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -213,51 +209,46 @@ export default function GroupsScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
-        <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.header}>
-          <View>
+        <Animated.View entering={FadeInDown.delay(50).duration(400)} style={styles.header}>
+          <View style={styles.headerTop}>
             <Text style={styles.headerTitle}>Groupes</Text>
-            <Text style={styles.headerSubtitle}>Défie tes amis au quotidien</Text>
+            {hasGroups && (
+              <TouchableOpacity
+                onPress={() => setShowActionMenu(true)}
+                style={styles.headerAddButton}
+              >
+                <Ionicons name="add" size={22} color={Colors.accent} />
+              </TouchableOpacity>
+            )}
           </View>
-          {/* Show + button in header when user has groups */}
-          {hasGroups && (
-            <TouchableOpacity
-              onPress={() => setShowActionMenu(true)}
-              style={styles.headerAddButton}
-            >
-              <Ionicons name="add" size={28} color={Colors.textPrimary} />
-            </TouchableOpacity>
-          )}
+          <Text style={styles.headerSubtitle}>Défie tes amis</Text>
         </Animated.View>
 
-        {/* Show big buttons only when no groups */}
+        {/* Big Action Buttons (when no groups) */}
         {!hasGroups && groups !== undefined && (
-          <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.actionsRow}>
+          <Animated.View entering={FadeInDown.delay(100).duration(400)} style={styles.actionsRow}>
             <TouchableOpacity
               onPress={() => setShowCreateModal(true)}
               style={styles.actionButton}
-              activeOpacity={0.85}
+              activeOpacity={0.9}
             >
               <View style={styles.actionButtonIcon}>
-                <Ionicons name="add" size={32} color={Colors.textPrimary} />
+                <Ionicons name="add" size={28} color={Colors.white} />
               </View>
-              <View style={styles.actionButtonTextContainer}>
-                <Text style={styles.actionButtonText}>Créer</Text>
-                <Text style={styles.actionButtonSubtext}>Nouveau groupe</Text>
-              </View>
+              <Text style={styles.actionButtonText}>Créer</Text>
+              <Text style={styles.actionButtonSubtext}>Nouveau groupe</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => setShowJoinModal(true)}
-              style={styles.actionButton}
-              activeOpacity={0.85}
+              style={[styles.actionButton, styles.actionButtonSecondary]}
+              activeOpacity={0.9}
             >
-              <View style={styles.actionButtonIcon}>
-                <Ionicons name="enter" size={32} color={Colors.textPrimary} />
+              <View style={[styles.actionButtonIcon, styles.actionButtonIconSecondary]}>
+                <Ionicons name="enter-outline" size={28} color={Colors.accent} />
               </View>
-              <View style={styles.actionButtonTextContainer}>
-                <Text style={styles.actionButtonText}>Rejoindre</Text>
-                <Text style={styles.actionButtonSubtext}>Avec un code</Text>
-              </View>
+              <Text style={[styles.actionButtonText, styles.actionButtonTextSecondary]}>Rejoindre</Text>
+              <Text style={styles.actionButtonSubtextSecondary}>Avec un code</Text>
             </TouchableOpacity>
           </Animated.View>
         )}
@@ -265,14 +256,16 @@ export default function GroupsScreen() {
         {/* Groups List */}
         {groups === undefined ? (
           <View style={styles.loadingSection}>
-            <ActivityIndicator color={Colors.success} size="large" />
+            <ActivityIndicator color={Colors.accent} size="large" />
           </View>
         ) : groups.length === 0 ? (
-          <Animated.View entering={FadeIn.delay(200)} style={styles.emptyState}>
-            <Ionicons name="people-outline" size={64} color={Colors.textTertiary} />
-            <Text style={styles.emptyTitle}>Pas encore de groupe</Text>
+          <Animated.View entering={FadeIn.delay(200).duration(400)} style={styles.emptyState}>
+            <View style={styles.emptyIconBox}>
+              <Ionicons name="people-outline" size={32} color={Colors.textTertiary} />
+            </View>
+            <Text style={styles.emptyTitle}>Aucun groupe</Text>
             <Text style={styles.emptyText}>
-              Crée un groupe et invite tes amis pour commencer!
+              Crée un groupe et invite tes amis
             </Text>
           </Animated.View>
         ) : (
@@ -280,21 +273,24 @@ export default function GroupsScreen() {
             {groups.map((group: any, index: number) => (
               <Animated.View
                 key={group._id}
-                entering={FadeInUp.delay(100 + index * 80).springify()}
+                entering={FadeInUp.delay(100 + index * 60).duration(300)}
               >
                 <TouchableOpacity
                   onPress={() => router.push({ pathname: "/group-detail", params: { groupId: group._id } })}
                   style={styles.groupCard}
-                  activeOpacity={0.85}
+                  activeOpacity={0.9}
                 >
+                  {/* Group Header */}
                   <View style={styles.groupHeader}>
                     <View style={styles.groupInfo}>
                       <Text style={styles.groupName}>{group.name}</Text>
                       <View style={styles.groupMeta}>
-                        <Ionicons name="people" size={14} color={Colors.textTertiary} />
-                        <Text style={styles.groupMetaText}>
-                          {group.memberCount} membre{group.memberCount > 1 ? "s" : ""}
-                        </Text>
+                        <View style={styles.membersBadge}>
+                          <Ionicons name="people-outline" size={14} color={Colors.textSecondary} />
+                          <Text style={styles.membersText}>
+                            {group.memberCount}
+                          </Text>
+                        </View>
                         {group.role === "admin" && (
                           <View style={styles.adminBadge}>
                             <Text style={styles.adminBadgeText}>Admin</Text>
@@ -309,26 +305,26 @@ export default function GroupsScreen() {
                       }}
                       style={styles.shareButton}
                     >
-                      <Ionicons name="share-social" size={20} color={Colors.success} />
+                      <Ionicons name="share-social-outline" size={18} color={Colors.accent} />
                     </TouchableOpacity>
                   </View>
 
-                  {/* Tasks Count */}
+                  {/* Stats */}
                   <View style={styles.groupStats}>
-                    <View style={styles.statItem}>
+                    <View style={styles.statBox}>
                       <Text style={styles.statValue}>{group.taskCount || 0}</Text>
-                      <Text style={styles.statLabel}>Tâches actives</Text>
+                      <Text style={styles.statLabel}>Tâches</Text>
                     </View>
                     <View style={styles.statDivider} />
-                    <View style={styles.statItem}>
+                    <View style={styles.statBox}>
                       <Text style={[styles.statValue, styles.statValueMoney]}>
                         +{(group.taskCount || 0) * 10}€
                       </Text>
-                      <Text style={styles.statLabel}>Gains potentiels</Text>
+                      <Text style={styles.statLabel}>Potentiel</Text>
                     </View>
                   </View>
 
-                  {/* Add Task Button */}
+                  {/* Add Task */}
                   <TouchableOpacity
                     onPress={(e) => {
                       e.stopPropagation();
@@ -336,14 +332,14 @@ export default function GroupsScreen() {
                     }}
                     style={styles.addTaskButton}
                   >
-                    <Ionicons name="add-circle" size={20} color={Colors.success} />
-                    <Text style={styles.addTaskText}>Ajouter une tâche</Text>
+                    <Ionicons name="add" size={18} color={Colors.accent} />
+                    <Text style={styles.addTaskText}>Nouvelle tâche</Text>
                   </TouchableOpacity>
 
-                  {/* View Details Indicator */}
-                  <View style={styles.viewDetailsIndicator}>
-                    <Text style={styles.viewDetailsText}>Voir les détails</Text>
-                    <Ionicons name="chevron-forward" size={16} color={Colors.textTertiary} />
+                  {/* View Details */}
+                  <View style={styles.viewDetailsRow}>
+                    <Text style={styles.viewDetailsText}>Voir détails</Text>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
                   </View>
                 </TouchableOpacity>
               </Animated.View>
@@ -354,7 +350,7 @@ export default function GroupsScreen() {
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      {/* Action Menu Modal (when user has groups) */}
+      {/* Action Menu Modal */}
       <Modal
         visible={showActionMenu}
         animationType="fade"
@@ -368,7 +364,7 @@ export default function GroupsScreen() {
               style={styles.actionMenuItem}
             >
               <View style={styles.actionMenuIcon}>
-                <Ionicons name="add" size={24} color={Colors.textPrimary} />
+                <Ionicons name="add" size={20} color={Colors.white} />
               </View>
               <Text style={styles.actionMenuText}>Créer un groupe</Text>
             </TouchableOpacity>
@@ -377,8 +373,8 @@ export default function GroupsScreen() {
               onPress={openJoinModal}
               style={styles.actionMenuItem}
             >
-              <View style={styles.actionMenuIcon}>
-                <Ionicons name="enter" size={24} color={Colors.textPrimary} />
+              <View style={[styles.actionMenuIcon, styles.actionMenuIconSecondary]}>
+                <Ionicons name="enter-outline" size={20} color={Colors.accent} />
               </View>
               <Text style={styles.actionMenuText}>Rejoindre un groupe</Text>
             </TouchableOpacity>
@@ -403,14 +399,17 @@ export default function GroupsScreen() {
             onPress={() => setShowCreateModal(false)}
           />
           <Animated.View
-            entering={SlideInDown.springify()}
+            entering={SlideInDown.duration(300)}
             style={styles.modalContainer}
           >
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Créer un groupe</Text>
-              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.textPrimary} />
+              <TouchableOpacity
+                onPress={() => setShowCreateModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={20} color={Colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -422,7 +421,7 @@ export default function GroupsScreen() {
               <TextInput
                 style={styles.textInput}
                 placeholder="Ex: Les Warriors"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={Colors.textMuted}
                 value={groupName}
                 onChangeText={setGroupName}
                 autoFocus
@@ -463,7 +462,7 @@ export default function GroupsScreen() {
                             {friend.name}
                           </Text>
                           {isSelected && (
-                            <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
+                            <Ionicons name="checkmark" size={16} color={Colors.white} />
                           )}
                         </TouchableOpacity>
                       );
@@ -486,7 +485,7 @@ export default function GroupsScreen() {
                 ]}
               >
                 {isLoading ? (
-                  <ActivityIndicator color={Colors.black} />
+                  <ActivityIndicator color={Colors.white} />
                 ) : (
                   <Text style={styles.modalSubmitButtonText}>Créer le groupe</Text>
                 )}
@@ -515,14 +514,17 @@ export default function GroupsScreen() {
             onPress={() => setShowJoinModal(false)}
           />
           <Animated.View
-            entering={SlideInDown.springify()}
+            entering={SlideInDown.duration(300)}
             style={styles.modalContainer}
           >
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Rejoindre un groupe</Text>
-              <TouchableOpacity onPress={() => setShowJoinModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.textPrimary} />
+              <TouchableOpacity
+                onPress={() => setShowJoinModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={20} color={Colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -534,7 +536,7 @@ export default function GroupsScreen() {
               <TextInput
                 style={styles.codeInput}
                 placeholder="ABC123"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={Colors.textMuted}
                 value={inviteCode}
                 onChangeText={(text) => setInviteCode(text.toUpperCase().slice(0, 6))}
                 autoCapitalize="characters"
@@ -551,7 +553,7 @@ export default function GroupsScreen() {
                 ]}
               >
                 {isLoading ? (
-                  <ActivityIndicator color={Colors.black} />
+                  <ActivityIndicator color={Colors.white} />
                 ) : (
                   <Text style={styles.modalSubmitButtonText}>Rejoindre</Text>
                 )}
@@ -578,14 +580,17 @@ export default function GroupsScreen() {
             onPress={() => setShowTaskModal(false)}
           />
           <Animated.View
-            entering={SlideInDown.springify()}
+            entering={SlideInDown.duration(300)}
             style={styles.modalContainerLarge}
           >
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Nouvelle tâche</Text>
-              <TouchableOpacity onPress={() => setShowTaskModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.textPrimary} />
+              <TouchableOpacity
+                onPress={() => setShowTaskModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={20} color={Colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -597,7 +602,7 @@ export default function GroupsScreen() {
               <TextInput
                 style={styles.textInput}
                 placeholder="Ex: 10 000 pas"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={Colors.textMuted}
                 value={taskTitle}
                 onChangeText={setTaskTitle}
               />
@@ -630,16 +635,18 @@ export default function GroupsScreen() {
                 <TextInput
                   style={styles.betInput}
                   placeholder="5"
-                  placeholderTextColor={Colors.textTertiary}
+                  placeholderTextColor={Colors.textMuted}
                   value={taskBet}
                   onChangeText={setTaskBet}
                   keyboardType="numeric"
                 />
-                <Text style={styles.betCurrency}>€</Text>
+                <View style={styles.betCurrencyBox}>
+                  <Text style={styles.betCurrency}>EUR</Text>
+                </View>
               </View>
 
               <View style={styles.taskInfoBox}>
-                <Ionicons name="information-circle" size={20} color={Colors.info} />
+                <Ionicons name="information-circle-outline" size={18} color={Colors.info} />
                 <Text style={styles.taskInfoText}>
                   Si tu rates, tu perds {taskBet}€. Si les autres ratent, tu gagnes leur mise!
                 </Text>
@@ -654,7 +661,7 @@ export default function GroupsScreen() {
                 ]}
               >
                 {isLoading ? (
-                  <ActivityIndicator color={Colors.black} />
+                  <ActivityIndicator color={Colors.white} />
                 ) : (
                   <Text style={styles.modalSubmitButtonText}>Créer la tâche</Text>
                 )}
@@ -681,114 +688,162 @@ const styles = StyleSheet.create({
     gap: Spacing.lg,
     paddingHorizontal: Spacing.xl,
   },
+  loginIconBox: {
+    width: 72,
+    height: 72,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.full,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loginTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+  },
+  loginSubtitle: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: Colors.textTertiary,
+    textAlign: "center",
+  },
+  loginButton: {
+    backgroundColor: Colors.accent,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.full,
+    marginTop: Spacing.md,
+  },
+  loginButtonText: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: Colors.white,
+  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingTop: Spacing.lg,
-    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
+    paddingHorizontal: Spacing.lg,
   },
+
+  // Header
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
     marginBottom: Spacing.xl,
   },
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.xs,
+  },
   headerTitle: {
-    fontSize: 32,
-    fontWeight: "800",
+    fontSize: 28,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
   headerSubtitle: {
-    ...Typography.bodyMedium,
+    fontSize: 15,
+    fontWeight: "400",
     color: Colors.textTertiary,
-    marginTop: Spacing.xs,
   },
   headerAddButton: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceElevated,
+    width: 40,
+    height: 40,
+    backgroundColor: Colors.accentMuted,
+    borderRadius: BorderRadius.full,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
-  // Big Action Buttons (when no groups)
+
+  // Action Buttons
   actionsRow: {
     flexDirection: "row",
-    gap: Spacing.md,
-    marginBottom: Spacing.xxl,
+    gap: Spacing.sm,
+    marginBottom: Spacing.xl,
   },
   actionButton: {
     flex: 1,
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.xl,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    ...Shadows.md,
+    backgroundColor: Colors.accent,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    alignItems: "center",
+  },
+  actionButtonSecondary: {
+    backgroundColor: Colors.surface,
+    ...Shadows.sm,
   },
   actionButtonIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surfaceHighlight,
+    width: 48,
+    height: 48,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: BorderRadius.full,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
-  actionButtonTextContainer: {
-    gap: Spacing.xs,
+  actionButtonIconSecondary: {
+    backgroundColor: Colors.accentMuted,
   },
   actionButtonText: {
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.white,
+  },
+  actionButtonTextSecondary: {
     color: Colors.textPrimary,
   },
   actionButtonSubtext: {
-    ...Typography.bodySmall,
-    color: Colors.textTertiary,
+    fontSize: 12,
+    fontWeight: "400",
+    color: "rgba(255,255,255,0.7)",
+    marginTop: 2,
   },
+  actionButtonSubtextSecondary: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: Colors.textTertiary,
+    marginTop: 2,
+  },
+
   // Loading & Empty
   loadingSection: {
-    padding: Spacing.huge,
+    padding: Spacing.xl,
     alignItems: "center",
   },
   emptyState: {
     alignItems: "center",
-    paddingVertical: Spacing.huge,
+    paddingVertical: Spacing.xl,
     gap: Spacing.md,
   },
+  emptyIconBox: {
+    width: 72,
+    height: 72,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.full,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   emptyTitle: {
-    ...Typography.headlineSmall,
+    fontSize: 18,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
   emptyText: {
-    ...Typography.bodyMedium,
+    fontSize: 14,
+    fontWeight: "400",
     color: Colors.textTertiary,
     textAlign: "center",
   },
-  authButton: {
-    backgroundColor: Colors.textPrimary,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xxl,
-    borderRadius: BorderRadius.full,
-  },
-  authButtonText: {
-    ...Typography.labelMedium,
-    color: Colors.black,
-  },
+
   // Groups List
   groupsList: {
-    gap: Spacing.lg,
+    gap: Spacing.md,
   },
   groupCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
     ...Shadows.sm,
   },
   groupHeader: {
@@ -802,8 +857,8 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   groupName: {
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
   groupMeta: {
@@ -811,105 +866,120 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.sm,
   },
-  groupMetaText: {
-    ...Typography.bodySmall,
-    color: Colors.textTertiary,
+  membersBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.surfaceHighlight,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  membersText: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: Colors.textSecondary,
   },
   adminBadge: {
-    backgroundColor: Colors.successMuted,
+    backgroundColor: Colors.accentMuted,
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
   },
   adminBadgeText: {
-    ...Typography.labelSmall,
-    color: Colors.success,
-    fontSize: 10,
+    fontSize: 11,
+    fontWeight: "500",
+    color: Colors.accent,
   },
   shareButton: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.successMuted,
+    backgroundColor: Colors.accentMuted,
+    borderRadius: BorderRadius.full,
     justifyContent: "center",
     alignItems: "center",
   },
-  // Group Stats
+
+  // Stats
   groupStats: {
     flexDirection: "row",
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.lg,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
   },
-  statItem: {
+  statBox: {
     flex: 1,
     alignItems: "center",
-    gap: Spacing.xs,
+    paddingVertical: Spacing.md,
+    gap: 2,
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: "700",
+    fontSize: 20,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
   statValueMoney: {
     color: Colors.success,
   },
   statLabel: {
-    ...Typography.labelSmall,
+    fontSize: 12,
+    fontWeight: "400",
     color: Colors.textTertiary,
   },
   statDivider: {
     width: 1,
     backgroundColor: Colors.border,
+    marginVertical: Spacing.sm,
   },
-  // Add Task Button
+
+  // Add Task
   addTaskButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: Spacing.sm,
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: Colors.success,
-    borderStyle: "dashed",
+    backgroundColor: Colors.accentMuted,
+    borderRadius: BorderRadius.md,
   },
   addTaskText: {
-    ...Typography.labelMedium,
-    color: Colors.success,
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.accent,
   },
-  viewDetailsIndicator: {
+  viewDetailsRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: Spacing.lg,
+    marginTop: Spacing.md,
     paddingTop: Spacing.md,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
     gap: Spacing.xs,
   },
   viewDetailsText: {
-    ...Typography.bodySmall,
+    fontSize: 13,
+    fontWeight: "400",
     color: Colors.textTertiary,
   },
   bottomSpacer: {
     height: 120,
   },
+
   // Action Menu Modal
   actionMenuOverlay: {
     flex: 1,
-    backgroundColor: Colors.overlay,
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
     padding: Spacing.xl,
   },
   actionMenuContainer: {
     backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
     width: "100%",
     maxWidth: 320,
+    ...Shadows.lg,
   },
   actionMenuItem: {
     flexDirection: "row",
@@ -920,51 +990,55 @@ const styles = StyleSheet.create({
   actionMenuIcon: {
     width: 44,
     height: 44,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.surfaceHighlight,
+    backgroundColor: Colors.accent,
+    borderRadius: BorderRadius.full,
     justifyContent: "center",
     alignItems: "center",
   },
+  actionMenuIconSecondary: {
+    backgroundColor: Colors.accentMuted,
+  },
   actionMenuText: {
-    ...Typography.labelLarge,
+    fontSize: 15,
+    fontWeight: "500",
     color: Colors.textPrimary,
   },
   actionMenuDivider: {
     height: 1,
     backgroundColor: Colors.border,
-    marginHorizontal: Spacing.lg,
   },
-  // Modal Styles
+
+  // Modals
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: Colors.overlay,
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   modalContainer: {
     backgroundColor: Colors.surface,
-    borderTopLeftRadius: BorderRadius.xxl,
-    borderTopRightRadius: BorderRadius.xxl,
-    paddingHorizontal: Spacing.xl,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
-    paddingBottom: Spacing.huge,
+    paddingBottom: Spacing.xl,
   },
   modalContainerLarge: {
     backgroundColor: Colors.surface,
-    borderTopLeftRadius: BorderRadius.xxl,
-    borderTopRightRadius: BorderRadius.xxl,
-    paddingHorizontal: Spacing.xl,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
-    paddingBottom: Spacing.huge,
+    paddingBottom: Spacing.xl,
     maxHeight: "80%",
   },
   modalHandle: {
     width: 40,
     height: 4,
     backgroundColor: Colors.border,
-    borderRadius: 2,
+    borderRadius: BorderRadius.full,
     alignSelf: "center",
     marginBottom: Spacing.lg,
   },
@@ -975,114 +1049,126 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xl,
   },
   modalTitle: {
-    ...Typography.headlineMedium,
+    fontSize: 18,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.full,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   inputLabel: {
-    ...Typography.labelMedium,
+    fontSize: 13,
+    fontWeight: "500",
     color: Colors.textSecondary,
     marginBottom: Spacing.sm,
   },
   textInput: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    ...Typography.bodyLarge,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    fontSize: 15,
+    fontWeight: "400",
     color: Colors.textPrimary,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
   codeInput: {
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: Colors.surfaceHighlight,
     borderRadius: BorderRadius.lg,
-    padding: Spacing.xl,
-    fontSize: 28,
-    fontWeight: "700",
-    color: Colors.textPrimary,
+    padding: Spacing.lg,
+    fontSize: 24,
+    fontWeight: "600",
+    color: Colors.accent,
     textAlign: "center",
     letterSpacing: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
     marginBottom: Spacing.xl,
   },
   frequencyRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.sm,
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
   frequencyButton: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
+    backgroundColor: Colors.surfaceHighlight,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
   frequencyButtonActive: {
-    backgroundColor: Colors.success,
-    borderColor: Colors.success,
+    backgroundColor: Colors.accent,
   },
   frequencyButtonText: {
-    ...Typography.labelMedium,
+    fontSize: 13,
+    fontWeight: "500",
     color: Colors.textSecondary,
   },
   frequencyButtonTextActive: {
-    color: Colors.black,
+    color: Colors.white,
   },
   betInputRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: Spacing.xl,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.lg,
   },
   betInput: {
     flex: 1,
-    padding: Spacing.lg,
-    fontSize: 24,
-    fontWeight: "700",
-    color: Colors.success,
+    padding: Spacing.md,
+    fontSize: 20,
+    fontWeight: "600",
+    color: Colors.accent,
+  },
+  betCurrencyBox: {
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderTopRightRadius: BorderRadius.md,
+    borderBottomRightRadius: BorderRadius.md,
   },
   betCurrency: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: Colors.success,
-    paddingRight: Spacing.lg,
+    fontSize: 13,
+    fontWeight: "500",
+    color: Colors.textSecondary,
   },
   taskInfoBox: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
     backgroundColor: Colors.infoMuted,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.lg,
-    marginBottom: Spacing.xl,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.lg,
   },
   taskInfoText: {
     flex: 1,
-    ...Typography.bodySmall,
+    fontSize: 13,
+    fontWeight: "400",
     color: Colors.info,
   },
   modalSubmitButton: {
-    backgroundColor: Colors.success,
-    paddingVertical: Spacing.lg,
-    borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.accent,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.full,
     alignItems: "center",
   },
   modalSubmitButtonDisabled: {
     opacity: 0.5,
   },
   modalSubmitButtonText: {
-    ...Typography.labelLarge,
-    color: Colors.black,
+    fontSize: 15,
+    fontWeight: "500",
+    color: Colors.white,
   },
-  // Friends Selection in Create Modal
+
+  // Friends Selection
   friendsSelectionSection: {
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
   friendsSelectionList: {
     flexDirection: "row",
@@ -1092,49 +1178,47 @@ const styles = StyleSheet.create({
   friendSelectionItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surfaceElevated,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.surfaceHighlight,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
     borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    borderColor: Colors.border,
     gap: Spacing.sm,
   },
   friendSelectionItemSelected: {
-    backgroundColor: Colors.successMuted,
-    borderColor: Colors.success,
+    backgroundColor: Colors.accent,
   },
   friendSelectionAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.surfaceHighlight,
+    width: 24,
+    height: 24,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.full,
     justifyContent: "center",
     alignItems: "center",
   },
   friendSelectionAvatarSelected: {
-    backgroundColor: Colors.success,
+    backgroundColor: "rgba(255,255,255,0.2)",
   },
   friendSelectionAvatarText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: Colors.textPrimary,
+    fontSize: 11,
+    fontWeight: "500",
+    color: Colors.textSecondary,
   },
   friendSelectionAvatarTextSelected: {
-    color: Colors.black,
+    color: Colors.white,
   },
   friendSelectionName: {
-    ...Typography.labelMedium,
+    fontSize: 13,
+    fontWeight: "500",
     color: Colors.textPrimary,
-    maxWidth: 100,
+    maxWidth: 80,
   },
   friendSelectionNameSelected: {
-    color: Colors.success,
+    color: Colors.white,
   },
   selectedFriendsCount: {
-    ...Typography.bodySmall,
-    color: Colors.success,
-    marginTop: Spacing.md,
-    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "500",
+    color: Colors.accent,
+    marginTop: Spacing.sm,
   },
 });

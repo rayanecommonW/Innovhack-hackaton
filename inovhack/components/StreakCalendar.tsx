@@ -1,10 +1,16 @@
+/**
+ * StreakCalendar - Clean & Minimal
+ * Inspired by Luma's elegant simplicity
+ */
+
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { Colors, Spacing, BorderRadius, Typography } from "../constants/theme";
+import { Ionicons } from "@expo/vector-icons";
+import { Colors, Spacing, BorderRadius, Shadows } from "../constants/theme";
 
 interface StreakCalendarProps {
-  completedDays: number[]; // Array of day numbers (1-30) that are completed
+  completedDays: number[];
   currentStreak: number;
 }
 
@@ -12,57 +18,58 @@ const StreakCalendar: React.FC<StreakCalendarProps> = ({ completedDays, currentS
   const today = new Date().getDate();
   const daysInMonth = 30;
 
-  const getDayColor = (day: number) => {
+  const getDayStyle = (day: number) => {
     if (completedDays.includes(day)) {
-      return Colors.success;
+      return { bg: Colors.success, opacity: 1 };
     }
     if (day < today && !completedDays.includes(day)) {
-      return Colors.danger + "40";
+      return { bg: Colors.danger, opacity: 0.6 };
     }
     if (day === today) {
-      return Colors.accent;
+      return { bg: Colors.accent, opacity: 1 };
     }
-    return Colors.surfaceHighlight;
+    return { bg: Colors.surfaceHighlight, opacity: 1 };
   };
 
   return (
-    <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.container}>
+    <Animated.View entering={FadeInDown.delay(150).duration(400)} style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>Ce mois-ci</Text>
-          <View style={styles.streakBadge}>
-            <Text style={styles.streakEmoji}>🔥</Text>
-            <Text style={styles.streakText}>{currentStreak} jours</Text>
-          </View>
+        <Text style={styles.title}>Ce mois</Text>
+        <View style={styles.streakBadge}>
+          <Ionicons name="flame-outline" size={14} color={Colors.warning} />
+          <Text style={styles.streakNumber}>{currentStreak}</Text>
+          <Text style={styles.streakLabel}>jours</Text>
         </View>
       </View>
 
-      <View style={styles.calendarGrid}>
+      {/* Calendar Grid */}
+      <View style={styles.grid}>
         {Array.from({ length: daysInMonth }).map((_, index) => {
           const day = index + 1;
           const isToday = day === today;
+          const { bg, opacity } = getDayStyle(day);
           return (
             <View
               key={day}
               style={[
                 styles.dayCell,
-                { backgroundColor: getDayColor(day) },
+                { backgroundColor: bg, opacity },
                 isToday && styles.todayCell,
               ]}
-            >
-              {isToday && <View style={styles.todayDot} />}
-            </View>
+            />
           );
         })}
       </View>
 
+      {/* Legend */}
       <View style={styles.legend}>
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, { backgroundColor: Colors.success }]} />
-          <Text style={styles.legendText}>Validé</Text>
+          <Text style={styles.legendText}>Réussi</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: Colors.danger + "40" }]} />
+          <View style={[styles.legendDot, { backgroundColor: Colors.danger, opacity: 0.6 }]} />
           <Text style={styles.legendText}>Raté</Text>
         </View>
         <View style={styles.legendItem}>
@@ -76,62 +83,55 @@ const StreakCalendar: React.FC<StreakCalendarProps> = ({ completedDays, currentS
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xxl,
-    padding: Spacing.xl,
-    marginHorizontal: Spacing.xl,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
     marginBottom: Spacing.xl,
+    ...Shadows.sm,
   },
   header: {
-    marginBottom: Spacing.lg,
-  },
-  titleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: Spacing.lg,
   },
   title: {
-    ...Typography.labelLarge,
+    fontSize: 16,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
   streakBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFF3E0",
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
+    backgroundColor: Colors.warningMuted,
     borderRadius: BorderRadius.full,
-    gap: Spacing.xs,
-  },
-  streakEmoji: {
-    fontSize: 14,
-  },
-  streakText: {
-    ...Typography.labelSmall,
-    color: "#FF6B00",
-    fontWeight: "700",
-  },
-  calendarGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
     gap: 4,
   },
+  streakNumber: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.warning,
+  },
+  streakLabel: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: Colors.warning,
+  },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
   dayCell: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    justifyContent: "center",
-    alignItems: "center",
+    width: 24,
+    height: 24,
+    borderRadius: BorderRadius.xs,
   },
   todayCell: {
     borderWidth: 2,
-    borderColor: Colors.textPrimary,
-  },
-  todayDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.black,
+    borderColor: Colors.white,
   },
   legend: {
     flexDirection: "row",
@@ -150,12 +150,12 @@ const styles = StyleSheet.create({
   legendDot: {
     width: 10,
     height: 10,
-    borderRadius: 3,
+    borderRadius: BorderRadius.full,
   },
   legendText: {
-    ...Typography.labelSmall,
+    fontSize: 12,
+    fontWeight: "400",
     color: Colors.textTertiary,
-    fontSize: 10,
   },
 });
 

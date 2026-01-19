@@ -1,8 +1,13 @@
+/**
+ * Leaderboard - Clean & Minimal
+ * Inspired by Luma's elegant simplicity
+ */
+
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Spacing, BorderRadius, Typography, Shadows } from "../constants/theme";
+import { Colors, Spacing, BorderRadius, Shadows } from "../constants/theme";
 
 interface LeaderboardUser {
   id: string;
@@ -18,37 +23,25 @@ interface LeaderboardProps {
   title?: string;
 }
 
-const getMedalColor = (position: number) => {
+const getMedalConfig = (position: number) => {
   switch (position) {
     case 0:
-      return "#FFD700"; // Gold
+      return { color: "#D4AF37", bg: "#FDF6E3" }; // Soft gold
     case 1:
-      return "#C0C0C0"; // Silver
+      return { color: "#A8A8A8", bg: "#F5F5F5" }; // Soft silver
     case 2:
-      return "#CD7F32"; // Bronze
+      return { color: "#CD9B6D", bg: "#FBF4EF" }; // Soft bronze
     default:
-      return Colors.textTertiary;
-  }
-};
-
-const getMedalEmoji = (position: number) => {
-  switch (position) {
-    case 0:
-      return "🥇";
-    case 1:
-      return "🥈";
-    case 2:
-      return "🥉";
-    default:
-      return `${position + 1}`;
+      return { color: Colors.textTertiary, bg: Colors.surfaceHighlight };
   }
 };
 
 const Leaderboard: React.FC<LeaderboardProps> = ({ users, title = "Classement" }) => {
   return (
-    <Animated.View entering={FadeInDown.delay(150).springify()} style={styles.container}>
+    <Animated.View entering={FadeInDown.delay(150).duration(400)} style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <Ionicons name="trophy" size={20} color={Colors.accent} />
+        <Ionicons name="trophy-outline" size={18} color={Colors.accent} />
         <Text style={styles.title}>{title}</Text>
       </View>
 
@@ -57,16 +50,18 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ users, title = "Classement" }
         {/* 2nd Place */}
         {users[1] && (
           <Animated.View
-            entering={FadeInDown.delay(300).springify()}
+            entering={FadeInDown.delay(300).duration(300)}
             style={[styles.podiumItem, styles.podiumSecond]}
           >
-            <View style={[styles.podiumAvatar, { backgroundColor: "#C0C0C0" }]}>
-              <Text style={styles.podiumAvatarText}>{users[1].name.charAt(0)}</Text>
+            <View style={[styles.podiumAvatar, { backgroundColor: getMedalConfig(1).bg }]}>
+              <Text style={[styles.podiumAvatarText, { color: getMedalConfig(1).color }]}>
+                {users[1].name.charAt(0)}
+              </Text>
             </View>
             <Text style={styles.podiumName} numberOfLines={1}>{users[1].name}</Text>
             <Text style={styles.podiumPoints}>{users[1].points} pts</Text>
-            <View style={[styles.podiumBar, { height: 60, backgroundColor: "#C0C0C0" }]}>
-              <Text style={styles.podiumPosition}>2</Text>
+            <View style={[styles.podiumBar, styles.podiumBarSecond]}>
+              <Text style={[styles.podiumPosition, { color: getMedalConfig(1).color }]}>2</Text>
             </View>
           </Animated.View>
         )}
@@ -74,17 +69,21 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ users, title = "Classement" }
         {/* 1st Place */}
         {users[0] && (
           <Animated.View
-            entering={FadeInDown.delay(200).springify()}
+            entering={FadeInDown.delay(200).duration(300)}
             style={[styles.podiumItem, styles.podiumFirst]}
           >
-            <Text style={styles.crownEmoji}>👑</Text>
-            <View style={[styles.podiumAvatar, { backgroundColor: "#FFD700" }]}>
-              <Text style={styles.podiumAvatarText}>{users[0].name.charAt(0)}</Text>
+            <View style={styles.crownBadge}>
+              <Ionicons name="sparkles" size={12} color={getMedalConfig(0).color} />
+            </View>
+            <View style={[styles.podiumAvatar, styles.podiumAvatarFirst]}>
+              <Text style={[styles.podiumAvatarText, styles.podiumAvatarTextFirst]}>
+                {users[0].name.charAt(0)}
+              </Text>
             </View>
             <Text style={styles.podiumName} numberOfLines={1}>{users[0].name}</Text>
-            <Text style={styles.podiumPoints}>{users[0].points} pts</Text>
-            <View style={[styles.podiumBar, { height: 80, backgroundColor: "#FFD700" }]}>
-              <Text style={styles.podiumPosition}>1</Text>
+            <Text style={[styles.podiumPoints, styles.podiumPointsFirst]}>{users[0].points} pts</Text>
+            <View style={[styles.podiumBar, styles.podiumBarFirst]}>
+              <Text style={[styles.podiumPosition, styles.podiumPositionFirst]}>1</Text>
             </View>
           </Animated.View>
         )}
@@ -92,16 +91,18 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ users, title = "Classement" }
         {/* 3rd Place */}
         {users[2] && (
           <Animated.View
-            entering={FadeInDown.delay(400).springify()}
+            entering={FadeInDown.delay(400).duration(300)}
             style={[styles.podiumItem, styles.podiumThird]}
           >
-            <View style={[styles.podiumAvatar, { backgroundColor: "#CD7F32" }]}>
-              <Text style={styles.podiumAvatarText}>{users[2].name.charAt(0)}</Text>
+            <View style={[styles.podiumAvatar, { backgroundColor: getMedalConfig(2).bg }]}>
+              <Text style={[styles.podiumAvatarText, { color: getMedalConfig(2).color }]}>
+                {users[2].name.charAt(0)}
+              </Text>
             </View>
             <Text style={styles.podiumName} numberOfLines={1}>{users[2].name}</Text>
             <Text style={styles.podiumPoints}>{users[2].points} pts</Text>
-            <View style={[styles.podiumBar, { height: 45, backgroundColor: "#CD7F32" }]}>
-              <Text style={styles.podiumPosition}>3</Text>
+            <View style={[styles.podiumBar, styles.podiumBarThird]}>
+              <Text style={[styles.podiumPosition, { color: getMedalConfig(2).color }]}>3</Text>
             </View>
           </Animated.View>
         )}
@@ -111,18 +112,20 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ users, title = "Classement" }
       {users.slice(3).map((user, index) => (
         <Animated.View
           key={user.id}
-          entering={FadeInRight.delay(500 + index * 50).springify()}
+          entering={FadeInRight.delay(500 + index * 50).duration(300)}
           style={[styles.listItem, user.isCurrentUser && styles.listItemCurrent]}
         >
-          <Text style={styles.listPosition}>{index + 4}</Text>
+          <View style={styles.listPosition}>
+            <Text style={styles.listPositionText}>{index + 4}</Text>
+          </View>
           <View style={styles.listAvatar}>
             <Text style={styles.listAvatarText}>{user.name.charAt(0)}</Text>
           </View>
           <View style={styles.listInfo}>
             <Text style={styles.listName}>{user.name}</Text>
             <View style={styles.listStreak}>
-              <Text style={styles.listStreakEmoji}>🔥</Text>
-              <Text style={styles.listStreakText}>{user.streak}</Text>
+              <Ionicons name="flame-outline" size={10} color={Colors.warning} />
+              <Text style={styles.listStreakText}>{user.streak} jours</Text>
             </View>
           </View>
           <Text style={styles.listPoints}>{user.points} pts</Text>
@@ -134,29 +137,31 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ users, title = "Classement" }
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xxl,
-    padding: Spacing.xl,
-    marginHorizontal: Spacing.xl,
-    marginBottom: Spacing.xl,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
     ...Shadows.sm,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
   },
   title: {
-    ...Typography.labelLarge,
+    fontSize: 16,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
+
+  // Podium
   podium: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "flex-end",
-    marginBottom: Spacing.xl,
-    paddingBottom: Spacing.md,
+    marginBottom: Spacing.lg,
+    paddingBottom: Spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
@@ -165,51 +170,84 @@ const styles = StyleSheet.create({
     width: 80,
   },
   podiumFirst: {
-    marginHorizontal: Spacing.md,
+    marginHorizontal: Spacing.sm,
   },
   podiumSecond: {},
   podiumThird: {},
-  crownEmoji: {
-    fontSize: 24,
-    marginBottom: Spacing.xs,
-  },
-  podiumAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  crownBadge: {
+    width: 24,
+    height: 24,
+    backgroundColor: getMedalConfig(0).bg,
+    borderRadius: BorderRadius.full,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: Spacing.xs,
   },
+  podiumAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.full,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: Spacing.xs,
+  },
+  podiumAvatarFirst: {
+    width: 52,
+    height: 52,
+    backgroundColor: getMedalConfig(0).bg,
+  },
   podiumAvatarText: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: Colors.black,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  podiumAvatarTextFirst: {
+    fontSize: 18,
+    color: getMedalConfig(0).color,
   },
   podiumName: {
-    ...Typography.labelSmall,
+    fontSize: 13,
+    fontWeight: "500",
     color: Colors.textPrimary,
     textAlign: "center",
     marginBottom: 2,
   },
   podiumPoints: {
-    ...Typography.labelSmall,
+    fontSize: 12,
+    fontWeight: "400",
     color: Colors.textTertiary,
-    fontSize: 10,
     marginBottom: Spacing.sm,
   },
+  podiumPointsFirst: {
+    color: Colors.accent,
+    fontWeight: "500",
+  },
   podiumBar: {
-    width: 50,
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    width: 40,
+    borderRadius: BorderRadius.sm,
     justifyContent: "center",
     alignItems: "center",
   },
+  podiumBarFirst: {
+    height: 64,
+    backgroundColor: getMedalConfig(0).bg,
+  },
+  podiumBarSecond: {
+    height: 48,
+    backgroundColor: getMedalConfig(1).bg,
+  },
+  podiumBarThird: {
+    height: 36,
+    backgroundColor: getMedalConfig(2).bg,
+  },
   podiumPosition: {
     fontSize: 18,
-    fontWeight: "900",
-    color: Colors.black,
+    fontWeight: "600",
   },
+  podiumPositionFirst: {
+    color: getMedalConfig(0).color,
+  },
+
+  // List Items
   listItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -218,20 +256,30 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   listItemCurrent: {
-    backgroundColor: Colors.successMuted,
-    marginHorizontal: -Spacing.xl,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.accentMuted,
+    marginHorizontal: -Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    borderBottomWidth: 0,
   },
   listPosition: {
     width: 24,
-    ...Typography.labelMedium,
+    height: 24,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.full,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: Spacing.sm,
+  },
+  listPositionText: {
+    fontSize: 12,
+    fontWeight: "500",
     color: Colors.textTertiary,
   },
   listAvatar: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: BorderRadius.full,
     backgroundColor: Colors.surfaceHighlight,
     justifyContent: "center",
     alignItems: "center",
@@ -239,32 +287,32 @@ const styles = StyleSheet.create({
   },
   listAvatarText: {
     fontSize: 14,
-    fontWeight: "700",
-    color: Colors.textPrimary,
+    fontWeight: "500",
+    color: Colors.textSecondary,
   },
   listInfo: {
     flex: 1,
   },
   listName: {
-    ...Typography.labelMedium,
+    fontSize: 14,
+    fontWeight: "500",
     color: Colors.textPrimary,
   },
   listStreak: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
-  },
-  listStreakEmoji: {
-    fontSize: 10,
+    gap: 3,
+    marginTop: 2,
   },
   listStreakText: {
-    ...Typography.labelSmall,
+    fontSize: 11,
+    fontWeight: "400",
     color: Colors.textTertiary,
-    fontSize: 10,
   },
   listPoints: {
-    ...Typography.labelMedium,
-    color: Colors.success,
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.accent,
   },
 });
 

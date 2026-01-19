@@ -1,3 +1,8 @@
+/**
+ * Community Proofs Validation Screen - LUMA Inspired Design
+ * Clean, elegant interface for validating community proofs
+ */
+
 import React, { useState } from "react";
 import {
   View,
@@ -21,7 +26,6 @@ import {
   Colors,
   Spacing,
   BorderRadius,
-  Typography,
   Shadows,
 } from "../constants/theme";
 
@@ -90,16 +94,33 @@ export default function CommunityProofsScreen() {
     );
   };
 
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp).toLocaleDateString("fr-FR", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   if (!userId) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.centered}>
-          <Text style={styles.emptyText}>Connecte-toi pour voter</Text>
+          <View style={styles.emptyIcon}>
+            <Ionicons name="log-in-outline" size={32} color={Colors.textMuted} />
+          </View>
+          <Text style={styles.emptyTitle}>Connecte-toi pour voter</Text>
+          <Text style={styles.emptySubtitle}>
+            Tu dois etre connecte pour valider les preuves
+          </Text>
           <TouchableOpacity
             onPress={() => router.push("/auth")}
             style={styles.loginButton}
+            activeOpacity={0.8}
           >
             <Text style={styles.loginButtonText}>Se connecter</Text>
+            <Ionicons name="arrow-forward" size={18} color={Colors.white} />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -109,18 +130,31 @@ export default function CommunityProofsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       {/* Header */}
-      <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+      <Animated.View entering={FadeInDown.delay(50)} style={styles.header}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={20} color={Colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Valider les preuves</Text>
+        <Text style={styles.headerTitle}>Validation</Text>
         <View style={styles.headerSpacer} />
+      </Animated.View>
+
+      {/* Subtitle */}
+      <Animated.View entering={FadeInDown.delay(100)} style={styles.subtitleContainer}>
+        <Text style={styles.subtitleText}>
+          Valide les preuves de la communaute
+        </Text>
       </Animated.View>
 
       {/* Badge count */}
       {proofsToVote && proofsToVote.length > 0 && (
-        <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.countBadge}>
-          <Ionicons name="documents" size={20} color={Colors.accent} />
+        <Animated.View entering={FadeInDown.delay(150)} style={styles.countBadge}>
+          <View style={styles.countIcon}>
+            <Ionicons name="documents-outline" size={16} color={Colors.accent} />
+          </View>
           <Text style={styles.countText}>
             {proofsToVote.length} preuve{proofsToVote.length > 1 ? "s" : ""} a valider
           </Text>
@@ -138,7 +172,9 @@ export default function CommunityProofsScreen() {
           </View>
         ) : proofsToVote.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="checkmark-circle" size={64} color={Colors.textTertiary} />
+            <View style={styles.emptyIcon}>
+              <Ionicons name="checkmark-circle-outline" size={40} color={Colors.textMuted} />
+            </View>
             <Text style={styles.emptyTitle}>Aucune preuve a valider</Text>
             <Text style={styles.emptySubtitle}>
               Les preuves de tes pacts apparaitront ici
@@ -148,7 +184,7 @@ export default function CommunityProofsScreen() {
           proofsToVote.map((proof: any, index: number) => (
             <Animated.View
               key={proof._id}
-              entering={FadeInUp.delay(150 + index * 50).springify()}
+              entering={FadeInUp.delay(200 + index * 80)}
               style={styles.proofCard}
             >
               {/* Card Header */}
@@ -159,29 +195,29 @@ export default function CommunityProofsScreen() {
                       {proof.userName.charAt(0).toUpperCase()}
                     </Text>
                   </View>
-                  <View>
+                  <View style={styles.userTextInfo}>
                     <Text style={styles.userName}>{proof.userName}</Text>
                     <Text style={styles.challengeTitle} numberOfLines={1}>
                       {proof.challengeTitle}
                     </Text>
                   </View>
                 </View>
-                <View style={styles.voteCount}>
-                  <View style={styles.voteItem}>
+                <View style={styles.voteStats}>
+                  <View style={styles.voteStat}>
                     <Ionicons name="checkmark" size={14} color={Colors.success} />
-                    <Text style={styles.voteNumber}>{proof.approveCount || 0}</Text>
+                    <Text style={styles.voteStatNumber}>{proof.approveCount || 0}</Text>
                   </View>
-                  <View style={styles.voteItem}>
+                  <View style={styles.voteStat}>
                     <Ionicons name="close" size={14} color={Colors.danger} />
-                    <Text style={styles.voteNumber}>{proof.vetoCount || 0}</Text>
+                    <Text style={styles.voteStatNumber}>{proof.vetoCount || 0}</Text>
                   </View>
                 </View>
               </View>
 
               {/* Proof Description */}
-              <Text style={styles.proofDesc}>
-                {proof.proofDescription || "Preuve soumise"}
-              </Text>
+              {proof.proofDescription && (
+                <Text style={styles.proofDesc}>{proof.proofDescription}</Text>
+              )}
 
               {/* Proof Content Preview */}
               <View style={styles.proofPreview}>
@@ -193,7 +229,7 @@ export default function CommunityProofsScreen() {
                   />
                 ) : proof.proofContent.includes(".pdf") ? (
                   <View style={styles.pdfPreview}>
-                    <Ionicons name="document" size={48} color={Colors.accent} />
+                    <Ionicons name="document-outline" size={40} color={Colors.accent} />
                     <Text style={styles.pdfText}>Document PDF</Text>
                   </View>
                 ) : (
@@ -209,14 +245,15 @@ export default function CommunityProofsScreen() {
               <View style={styles.voteButtons}>
                 <TouchableOpacity
                   onPress={() => handleVote(proof._id, "approve")}
-                  style={[styles.voteButton, styles.approveButton]}
+                  style={styles.approveButton}
                   disabled={votingProofId === proof._id}
+                  activeOpacity={0.8}
                 >
                   {votingProofId === proof._id ? (
-                    <ActivityIndicator size="small" color={Colors.black} />
+                    <ActivityIndicator size="small" color={Colors.white} />
                   ) : (
                     <>
-                      <Ionicons name="checkmark-circle" size={24} color={Colors.black} />
+                      <Ionicons name="checkmark-circle-outline" size={20} color={Colors.white} />
                       <Text style={styles.approveText}>Valider</Text>
                     </>
                   )}
@@ -224,23 +261,22 @@ export default function CommunityProofsScreen() {
 
                 <TouchableOpacity
                   onPress={() => confirmVeto(proof._id)}
-                  style={[styles.voteButton, styles.vetoButton]}
+                  style={styles.vetoButton}
                   disabled={votingProofId === proof._id}
+                  activeOpacity={0.8}
                 >
-                  <Ionicons name="close-circle" size={24} color={Colors.danger} />
-                  <Text style={styles.vetoText}>Veto</Text>
+                  <Ionicons name="close-circle-outline" size={20} color={Colors.danger} />
+                  <Text style={styles.vetoText}>Rejeter</Text>
                 </TouchableOpacity>
               </View>
 
               {/* Timestamp */}
-              <Text style={styles.timestamp}>
-                Soumis le {new Date(proof.submittedAt).toLocaleDateString("fr-FR", {
-                  day: "numeric",
-                  month: "short",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </Text>
+              <View style={styles.timestampRow}>
+                <Ionicons name="time-outline" size={14} color={Colors.textMuted} />
+                <Text style={styles.timestamp}>
+                  {formatDate(proof.submittedAt)}
+                </Text>
+              </View>
             </Animated.View>
           ))
         )}
@@ -260,95 +296,144 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    paddingHorizontal: Spacing.xl,
     gap: Spacing.lg,
   },
+
+  // Header
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.lg,
+    paddingVertical: Spacing.md,
   },
   backButton: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceHighlight,
     justifyContent: "center",
     alignItems: "center",
   },
   headerTitle: {
-    ...Typography.headlineMedium,
-    color: Colors.textPrimary,
     flex: 1,
+    fontSize: 18,
+    fontWeight: "600",
+    color: Colors.textPrimary,
     textAlign: "center",
+    letterSpacing: -0.2,
   },
   headerSpacer: {
     width: 40,
   },
+
+  // Subtitle
+  subtitleContainer: {
+    paddingHorizontal: Spacing.xl,
+    marginBottom: Spacing.md,
+  },
+  subtitleText: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: Colors.textTertiary,
+    textAlign: "center",
+  },
+
+  // Count Badge
   countBadge: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: Spacing.sm,
     paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
     backgroundColor: Colors.accentMuted,
     marginHorizontal: Spacing.xl,
     borderRadius: BorderRadius.full,
     marginBottom: Spacing.md,
   },
+  countIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.surface,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   countText: {
-    ...Typography.labelMedium,
+    fontSize: 14,
+    fontWeight: "500",
     color: Colors.accent,
   },
+
+  // Scroll
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.md,
+    paddingTop: Spacing.sm,
   },
+
+  // Empty State
   emptyState: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: Spacing.massive,
-    gap: Spacing.lg,
+    gap: Spacing.md,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.surfaceHighlight,
+    justifyContent: "center",
+    alignItems: "center",
   },
   emptyTitle: {
-    ...Typography.headlineMedium,
+    fontSize: 18,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
   emptySubtitle: {
-    ...Typography.bodyMedium,
+    fontSize: 14,
+    fontWeight: "400",
     color: Colors.textTertiary,
     textAlign: "center",
+    maxWidth: 280,
   },
-  emptyText: {
-    ...Typography.bodyLarge,
-    color: Colors.textTertiary,
-  },
+
+  // Login Button
   loginButton: {
-    backgroundColor: Colors.textPrimary,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.accent,
     paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xxl,
+    paddingHorizontal: Spacing.xl,
     borderRadius: BorderRadius.full,
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
   },
   loginButtonText: {
-    ...Typography.labelMedium,
-    color: Colors.black,
+    fontSize: 15,
+    fontWeight: "600",
+    color: Colors.white,
   },
+
+  // Proof Card
   proofCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
-    ...Shadows.md,
+    ...Shadows.sm,
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     marginBottom: Spacing.md,
   },
   userInfo: {
@@ -358,113 +443,144 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: Colors.surfaceHighlight,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.accent,
   },
   avatarText: {
-    ...Typography.labelLarge,
-    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.textSecondary,
+  },
+  userTextInfo: {
+    flex: 1,
   },
   userName: {
-    ...Typography.labelLarge,
+    fontSize: 15,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
   challengeTitle: {
-    ...Typography.bodySmall,
+    fontSize: 13,
+    fontWeight: "400",
     color: Colors.textTertiary,
+    marginTop: 2,
     maxWidth: SCREEN_WIDTH - 200,
   },
-  voteCount: {
+  voteStats: {
     flexDirection: "row",
     gap: Spacing.md,
   },
-  voteItem: {
+  voteStat: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.xs,
+    gap: 4,
   },
-  voteNumber: {
-    ...Typography.labelMedium,
+  voteStatNumber: {
+    fontSize: 14,
+    fontWeight: "500",
     color: Colors.textSecondary,
   },
   proofDesc: {
-    ...Typography.bodyMedium,
+    fontSize: 14,
+    fontWeight: "400",
     color: Colors.textSecondary,
     marginBottom: Spacing.md,
+    lineHeight: 20,
   },
+
+  // Proof Preview
   proofPreview: {
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.md,
     overflow: "hidden",
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   proofImage: {
     width: "100%",
     height: 200,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.surfaceHighlight,
   },
   pdfPreview: {
     height: 120,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.md,
     justifyContent: "center",
     alignItems: "center",
     gap: Spacing.sm,
   },
   pdfText: {
-    ...Typography.labelMedium,
+    fontSize: 14,
+    fontWeight: "500",
     color: Colors.textSecondary,
   },
   textPreview: {
-    padding: Spacing.lg,
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.md,
   },
   proofText: {
-    ...Typography.bodyMedium,
+    fontSize: 14,
+    fontWeight: "400",
     color: Colors.textPrimary,
+    lineHeight: 20,
   },
+
+  // Vote Buttons
   voteButtons: {
     flexDirection: "row",
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
-  voteButton: {
+  approveButton: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: Spacing.sm,
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
-  },
-  approveButton: {
+    borderRadius: BorderRadius.md,
     backgroundColor: Colors.success,
   },
   approveText: {
-    ...Typography.labelLarge,
-    color: Colors.black,
+    fontSize: 15,
+    fontWeight: "600",
+    color: Colors.white,
   },
   vetoButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
     backgroundColor: Colors.dangerMuted,
     borderWidth: 1,
     borderColor: Colors.danger,
   },
   vetoText: {
-    ...Typography.labelLarge,
+    fontSize: 15,
+    fontWeight: "600",
     color: Colors.danger,
   },
-  timestamp: {
-    ...Typography.bodySmall,
-    color: Colors.textTertiary,
-    textAlign: "center",
+
+  // Timestamp
+  timestampRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
     marginTop: Spacing.md,
   },
+  timestamp: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: Colors.textMuted,
+  },
+
   bottomSpacer: {
     height: 100,
   },

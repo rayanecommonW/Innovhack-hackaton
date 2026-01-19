@@ -1,3 +1,8 @@
+/**
+ * Add Funds Modal - LUMA Inspired Design
+ * Clean, elegant, minimal payment interface
+ */
+
 import React, { useState } from "react";
 import {
   View,
@@ -16,11 +21,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
+import Animated, { FadeIn, FadeInDown, SlideInDown } from "react-native-reanimated";
 import {
   Colors,
   Spacing,
   BorderRadius,
-  Typography,
+  Shadows,
 } from "../constants/theme";
 
 interface AddFundsModalProps {
@@ -65,7 +71,6 @@ export default function AddFundsModal({
     setIsProcessing(true);
 
     try {
-      // Simuler un délai de traitement (en prod, ici on appellerait Stripe/etc.)
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       await addFunds({
@@ -75,7 +80,7 @@ export default function AddFundsModal({
         reference: `TXN_${Date.now()}`,
       });
 
-      Alert.alert("Succès", `${numAmount}€ ajoutés à ton solde`);
+      Alert.alert("Succes", `${numAmount}€ ajoutes a ton solde`);
       setAmount("");
       setSelectedMethod(null);
       onSuccess?.();
@@ -107,34 +112,39 @@ export default function AddFundsModal({
         style={styles.overlay}
       >
         <Pressable style={styles.backdrop} onPress={handleClose} />
-        <View style={styles.container}>
+        <Animated.View entering={SlideInDown.springify()} style={styles.container}>
           <View style={styles.handle} />
+
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Ajouter des fonds</Text>
-            <TouchableOpacity onPress={handleClose} disabled={isProcessing}>
-              <Ionicons name="close" size={24} color={Colors.textPrimary} />
+            <TouchableOpacity
+              onPress={handleClose}
+              disabled={isProcessing}
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={20} color={Colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
           {/* Amount Input */}
-          <View style={styles.amountSection}>
+          <Animated.View entering={FadeInDown.delay(100)} style={styles.amountSection}>
             <View style={styles.amountInputContainer}>
               <Text style={styles.currency}>€</Text>
               <TextInput
                 style={styles.amountInput}
                 placeholder="0"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={Colors.textMuted}
                 value={amount}
                 onChangeText={setAmount}
                 keyboardType="numeric"
                 editable={!isProcessing}
               />
             </View>
-          </View>
+          </Animated.View>
 
           {/* Quick Amounts */}
-          <View style={styles.quickAmounts}>
+          <Animated.View entering={FadeInDown.delay(150)} style={styles.quickAmounts}>
             {QUICK_AMOUNTS.map((quickAmount) => (
               <TouchableOpacity
                 key={quickAmount}
@@ -144,6 +154,7 @@ export default function AddFundsModal({
                   amount === quickAmount.toString() && styles.quickAmountSelected,
                 ]}
                 disabled={isProcessing}
+                activeOpacity={0.7}
               >
                 <Text
                   style={[
@@ -155,117 +166,152 @@ export default function AddFundsModal({
                 </Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </Animated.View>
 
           {/* Payment Methods */}
-          <Text style={styles.sectionLabel}>MOYEN DE PAIEMENT</Text>
-          <View style={styles.methodsGrid}>
-            {/* Card */}
-            <TouchableOpacity
-              onPress={() => setSelectedMethod("card")}
-              style={[
-                styles.methodCard,
-                selectedMethod === "card" && styles.methodCardSelected,
-              ]}
-              disabled={isProcessing}
-            >
-              <Ionicons
-                name="card"
-                size={28}
-                color={selectedMethod === "card" ? Colors.black : Colors.textPrimary}
-              />
-              <Text
+          <Animated.View entering={FadeInDown.delay(200)}>
+            <Text style={styles.sectionLabel}>Moyen de paiement</Text>
+            <View style={styles.methodsGrid}>
+              {/* Card */}
+              <TouchableOpacity
+                onPress={() => setSelectedMethod("card")}
                 style={[
-                  styles.methodLabel,
-                  selectedMethod === "card" && styles.methodLabelSelected,
+                  styles.methodCard,
+                  selectedMethod === "card" && styles.methodCardSelected,
                 ]}
+                disabled={isProcessing}
+                activeOpacity={0.7}
               >
-                Carte
-              </Text>
-            </TouchableOpacity>
+                <View style={[
+                  styles.methodIconBox,
+                  selectedMethod === "card" && styles.methodIconBoxSelected,
+                ]}>
+                  <Ionicons
+                    name="card-outline"
+                    size={22}
+                    color={selectedMethod === "card" ? Colors.white : Colors.textSecondary}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.methodLabel,
+                    selectedMethod === "card" && styles.methodLabelSelected,
+                  ]}
+                >
+                  Carte
+                </Text>
+              </TouchableOpacity>
 
-            {/* Apple/Google Pay */}
-            <TouchableOpacity
-              onPress={() => setSelectedMethod(mobilePay)}
-              style={[
-                styles.methodCard,
-                selectedMethod === mobilePay && styles.methodCardSelected,
-              ]}
-              disabled={isProcessing}
-            >
-              <Ionicons
-                name={mobilePayIcon as any}
-                size={28}
-                color={selectedMethod === mobilePay ? Colors.black : Colors.textPrimary}
-              />
-              <Text
+              {/* Apple/Google Pay */}
+              <TouchableOpacity
+                onPress={() => setSelectedMethod(mobilePay)}
                 style={[
-                  styles.methodLabel,
-                  selectedMethod === mobilePay && styles.methodLabelSelected,
+                  styles.methodCard,
+                  selectedMethod === mobilePay && styles.methodCardSelected,
                 ]}
+                disabled={isProcessing}
+                activeOpacity={0.7}
               >
-                {mobilePayLabel}
-              </Text>
-            </TouchableOpacity>
+                <View style={[
+                  styles.methodIconBox,
+                  selectedMethod === mobilePay && styles.methodIconBoxSelected,
+                ]}>
+                  <Ionicons
+                    name={mobilePayIcon as any}
+                    size={22}
+                    color={selectedMethod === mobilePay ? Colors.white : Colors.textSecondary}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.methodLabel,
+                    selectedMethod === mobilePay && styles.methodLabelSelected,
+                  ]}
+                >
+                  {mobilePayLabel}
+                </Text>
+              </TouchableOpacity>
 
-            {/* Crypto */}
-            <TouchableOpacity
-              onPress={() => setSelectedMethod("crypto")}
-              style={[
-                styles.methodCard,
-                selectedMethod === "crypto" && styles.methodCardSelected,
-              ]}
-              disabled={isProcessing}
-            >
-              <Ionicons
-                name="wallet"
-                size={28}
-                color={selectedMethod === "crypto" ? Colors.black : Colors.textPrimary}
-              />
-              <Text
+              {/* Crypto */}
+              <TouchableOpacity
+                onPress={() => setSelectedMethod("crypto")}
                 style={[
-                  styles.methodLabel,
-                  selectedMethod === "crypto" && styles.methodLabelSelected,
+                  styles.methodCard,
+                  selectedMethod === "crypto" && styles.methodCardSelected,
                 ]}
+                disabled={isProcessing}
+                activeOpacity={0.7}
               >
-                Crypto
-              </Text>
-            </TouchableOpacity>
-          </View>
+                <View style={[
+                  styles.methodIconBox,
+                  selectedMethod === "crypto" && styles.methodIconBoxSelected,
+                ]}>
+                  <Ionicons
+                    name="wallet-outline"
+                    size={22}
+                    color={selectedMethod === "crypto" ? Colors.white : Colors.textSecondary}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.methodLabel,
+                    selectedMethod === "crypto" && styles.methodLabelSelected,
+                  ]}
+                >
+                  Crypto
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
 
           {/* Crypto Address Info */}
           {selectedMethod === "crypto" && (
-            <View style={styles.cryptoInfo}>
-              <Text style={styles.cryptoLabel}>Adresse USDC (Ethereum)</Text>
+            <Animated.View entering={FadeIn} style={styles.cryptoInfo}>
+              <View style={styles.cryptoHeader}>
+                <Ionicons name="information-circle-outline" size={18} color={Colors.info} />
+                <Text style={styles.cryptoLabel}>Adresse USDC (Ethereum)</Text>
+              </View>
               <View style={styles.cryptoAddress}>
                 <Text style={styles.cryptoAddressText} numberOfLines={1}>
                   0x742d35Cc6634C0532925a3b844Bc9e7595f...
                 </Text>
-                <TouchableOpacity>
-                  <Ionicons name="copy-outline" size={20} color={Colors.accent} />
+                <TouchableOpacity style={styles.copyButton}>
+                  <Ionicons name="copy-outline" size={18} color={Colors.accent} />
                 </TouchableOpacity>
               </View>
-            </View>
+            </Animated.View>
           )}
 
           {/* Submit Button */}
-          <TouchableOpacity
-            onPress={handleAddFunds}
-            disabled={isProcessing || !amount || !selectedMethod}
-            style={[
-              styles.submitButton,
-              (isProcessing || !amount || !selectedMethod) && styles.submitButtonDisabled,
-            ]}
-          >
-            {isProcessing ? (
-              <ActivityIndicator color={Colors.black} />
-            ) : (
-              <Text style={styles.submitButtonText}>
-                Ajouter {amount || "0"}€
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
+          <Animated.View entering={FadeInDown.delay(250)}>
+            <TouchableOpacity
+              onPress={handleAddFunds}
+              disabled={isProcessing || !amount || !selectedMethod}
+              style={[
+                styles.submitButton,
+                (isProcessing || !amount || !selectedMethod) && styles.submitButtonDisabled,
+              ]}
+              activeOpacity={0.8}
+            >
+              {isProcessing ? (
+                <ActivityIndicator color={Colors.white} />
+              ) : (
+                <>
+                  <Text style={styles.submitButtonText}>
+                    Ajouter {amount || "0"}€
+                  </Text>
+                  <Ionicons name="arrow-forward" size={18} color={Colors.white} />
+                </>
+              )}
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Security Notice */}
+          <View style={styles.securityNotice}>
+            <Ionicons name="shield-checkmark-outline" size={14} color={Colors.textMuted} />
+            <Text style={styles.securityText}>Paiement securise et chiffre</Text>
+          </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -281,7 +327,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   handle: {
-    width: 40,
+    width: 36,
     height: 4,
     backgroundColor: Colors.border,
     borderRadius: 2,
@@ -289,7 +335,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   container: {
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.background,
     borderTopLeftRadius: BorderRadius.xxl,
     borderTopRightRadius: BorderRadius.xxl,
     paddingHorizontal: Spacing.xl,
@@ -300,126 +346,193 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: Spacing.xxl,
+    marginBottom: Spacing.xl,
   },
   title: {
-    ...Typography.headlineMedium,
+    fontSize: 22,
+    fontWeight: "600",
     color: Colors.textPrimary,
+    letterSpacing: -0.3,
   },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceHighlight,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  // Amount
   amountSection: {
     alignItems: "center",
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
+    paddingVertical: Spacing.lg,
   },
   amountInputContainer: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "baseline",
   },
   currency: {
-    fontSize: 40,
-    fontWeight: "700",
-    color: Colors.textTertiary,
-    marginRight: Spacing.sm,
+    fontSize: 32,
+    fontWeight: "500",
+    color: Colors.textMuted,
+    marginRight: Spacing.xs,
   },
   amountInput: {
-    fontSize: 48,
-    fontWeight: "700",
+    fontSize: 56,
+    fontWeight: "600",
     color: Colors.textPrimary,
-    minWidth: 100,
+    minWidth: 80,
     textAlign: "center",
+    letterSpacing: -1,
   },
+
+  // Quick Amounts
   quickAmounts: {
     flexDirection: "row",
     gap: Spacing.sm,
-    marginBottom: Spacing.xxl,
+    marginBottom: Spacing.xl,
   },
   quickAmountButton: {
     flex: 1,
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: Colors.surface,
     paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.md,
     alignItems: "center",
     borderWidth: 1,
     borderColor: Colors.border,
   },
   quickAmountSelected: {
-    backgroundColor: Colors.success,
-    borderColor: Colors.success,
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
   },
   quickAmountText: {
-    ...Typography.labelMedium,
+    fontSize: 15,
+    fontWeight: "500",
     color: Colors.textSecondary,
   },
   quickAmountTextSelected: {
-    color: Colors.black,
+    color: Colors.white,
   },
+
+  // Section Label
   sectionLabel: {
-    ...Typography.labelSmall,
+    fontSize: 13,
+    fontWeight: "500",
     color: Colors.textTertiary,
     marginBottom: Spacing.md,
-    letterSpacing: 1,
   },
+
+  // Methods
   methodsGrid: {
     flexDirection: "row",
-    gap: Spacing.md,
-    marginBottom: Spacing.xl,
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
   },
   methodCard: {
     flex: 1,
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
     alignItems: "center",
     gap: Spacing.sm,
     borderWidth: 1,
     borderColor: Colors.border,
   },
   methodCardSelected: {
-    backgroundColor: Colors.textPrimary,
-    borderColor: Colors.textPrimary,
+    borderColor: Colors.accent,
+    backgroundColor: Colors.accentMuted,
+  },
+  methodIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.surfaceHighlight,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  methodIconBoxSelected: {
+    backgroundColor: Colors.accent,
   },
   methodLabel: {
-    ...Typography.labelSmall,
+    fontSize: 13,
+    fontWeight: "500",
     color: Colors.textSecondary,
-    textTransform: "none",
   },
   methodLabelSelected: {
-    color: Colors.black,
+    color: Colors.accent,
+    fontWeight: "600",
   },
+
+  // Crypto Info
   cryptoInfo: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: Colors.infoMuted,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  cryptoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    marginBottom: Spacing.sm,
   },
   cryptoLabel: {
-    ...Typography.labelSmall,
-    color: Colors.textTertiary,
-    marginBottom: Spacing.sm,
+    fontSize: 12,
+    fontWeight: "500",
+    color: Colors.info,
   },
   cryptoAddress: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.sm,
+    padding: Spacing.sm,
     gap: Spacing.sm,
   },
   cryptoAddressText: {
     flex: 1,
-    ...Typography.bodySmall,
+    fontSize: 12,
+    fontWeight: "500",
     color: Colors.textPrimary,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
   },
+  copyButton: {
+    padding: Spacing.xs,
+  },
+
+  // Submit Button
   submitButton: {
-    backgroundColor: Colors.textPrimary,
-    paddingVertical: Spacing.lg,
-    borderRadius: BorderRadius.lg,
+    flexDirection: "row",
+    backgroundColor: Colors.accent,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
     alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    ...Shadows.sm,
   },
   submitButtonDisabled: {
-    opacity: 0.5,
+    backgroundColor: Colors.surfaceHighlight,
   },
   submitButtonText: {
-    ...Typography.labelLarge,
-    color: Colors.black,
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.white,
+  },
+
+  // Security Notice
+  securityNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    marginTop: Spacing.lg,
+  },
+  securityText: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: Colors.textMuted,
   },
 });

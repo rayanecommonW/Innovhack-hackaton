@@ -139,3 +139,94 @@ export const updateParticipationStatus = mutation({
     await ctx.db.patch(args.participationId, { status: args.status });
   },
 });
+
+// Rejoindre un pact sponsorisé
+export const joinSponsoredChallenge = mutation({
+  args: {
+    sponsoredId: v.string(),
+    title: v.string(),
+    brandName: v.string(),
+    category: v.string(),
+    minBet: v.number(),
+    reward: v.number(),
+    rewardText: v.optional(v.string()),
+    durationDays: v.number(),
+    userId: v.id("users"),
+    betAmount: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // Vérifier la mise minimum
+    if (args.betAmount < args.minBet) {
+      throw new Error(`Mise minimum: ${args.minBet}€`);
+    }
+
+    // Vérifier le solde de l'utilisateur
+    const user = await ctx.db.get(args.userId);
+    if (!user) throw new Error("Utilisateur non trouvé");
+    if (user.balance < args.betAmount) throw new Error("Solde insuffisant");
+
+    // Chercher si le challenge sponsorisé existe déjà
+    let challenge = await ctx.db
+      .query("challenges")
+      .withIndex("by_sponsor", (q) => q.eq("sponsorId", args.sponsoredId))
+      .first();
+
+    // Si non, créer le challenge
+    if (!challenge) {
+      const challengeId = await ctx.db.insert("challenges", {
+        title: args.title,
+        description: `Pact sponsorisé par ${args.brandName}`,
+        goal: args.title,
+        category: args.category,
+        minBet: args.minBet,
+        maxParticipants: 10000,
+        currentParticipants: 0,
+        durationDays: args.durationDays,
+        status: "active",
+        type: "public",
+        creatorId: args.userId,
+        startDate: Date.now(),
+        endDate: Date.now() + args.durationDays * 24 * 60 * 60 * 1000,
+        sponsorName: args.brandName,
+        sponsorReward: args.reward,
+        sponsorRewardText: args.rewardText,
+        sponsorId: args.sponsoredId,
+        proofType: "photo",
+        proofDescription: "Prends une photo prouvant que tu as réalisé le défi",
+        proofValidationCriteria: "La photo doit montrer clairement la réalisation du défi",
+      });
+      challenge = await ctx.db.get(challengeId);
+    }
+
+    if (!challenge) throw new Error("Erreur lors de la création du pact");
+
+    // Vérifier que l'utilisateur n'a pas déjà rejoint
+    const existing = await ctx.db
+      .query("participations")
+      .withIndex("by_challenge_user", (q) =>
+        q.eq("challengeId", challenge!._id).eq("usertId", args.userId)
+      )
+      .first();
+
+    if (existing) throw new Error("Vous participez déjà à ce pact");
+
+    // Débiter le montant
+    await ctx.db.patch(args.userId, {
+      balance: user.balance - args.betAmount,
+    });
+
+    // Mettre à jour le nombre de participants
+    await ctx.db.patch(challenge._id, {
+      currentParticipants: (challenge.currentParticipants || 0) + 1,
+    });
+
+    // Créer la participation
+    return await ctx.db.insert("participations", {
+      challengeId: challenge._id,
+      usertId: args.userId,
+      betAmount: args.betAmount,
+      status: "active",
+      joinedAt: Date.now(),
+    });
+  },
+});

@@ -8,9 +8,20 @@ interface User {
   _id: Id<"users">;
   name: string;
   email: string;
+  username?: string;
+  bio?: string;
+  profileImageUrl?: string;
   balance: number;
   totalWins: number;
   totalLosses: number;
+  currentStreak?: number;
+  bestStreak?: number;
+  totalEarnings?: number;
+  totalPacts?: number;
+  successRate?: number;
+  onboardingCompleted?: boolean;
+  notificationsEnabled?: boolean;
+  pushToken?: string;
 }
 
 interface AuthContextType {
@@ -18,6 +29,7 @@ interface AuthContextType {
   userId: Id<"users"> | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  needsOnboarding: boolean;
   login: (email: string) => Promise<boolean>;
   signup: (name: string, email: string) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -92,6 +104,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // No-op: Convex useQuery automatically updates
   };
 
+  // Check if user needs onboarding
+  const needsOnboarding = !!user && !user.onboardingCompleted;
+
   return (
     <AuthContext.Provider
       value={{
@@ -99,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userId,
         isLoading,
         isAuthenticated: !!userId && !!user,
+        needsOnboarding,
         login,
         signup,
         logout,

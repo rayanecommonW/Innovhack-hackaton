@@ -1,3 +1,8 @@
+/**
+ * Explore Screen - Clean & Minimal
+ * Inspired by Luma's elegant simplicity
+ */
+
 import React, { useState } from "react";
 import {
   View,
@@ -29,90 +34,78 @@ import {
   Colors,
   Spacing,
   BorderRadius,
-  Typography,
   Shadows,
 } from "../../constants/theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-// 7 Sponsored Challenges with real brands
+// 6 Sponsored Challenges with real brands
 const SPONSORED_CHALLENGES = [
   {
     id: "sponsored-1",
-    title: "Aller 20 fois à la salle en janvier",
-    brandName: "Basic-Fit",
-    brandLogo: "https://www.google.com/s2/favicons?domain=basic-fit.com&sz=128",
-    brandColor: "#FF6B00",
-    minBet: 30,
-    reward: 50,
-    category: "fitness",
-    duration: "1 mois",
-  },
-  {
-    id: "sponsored-2",
     title: "30 jours consécutifs d'apprentissage",
     brandName: "Duolingo",
     brandLogo: "https://www.google.com/s2/favicons?domain=duolingo.com&sz=128",
     brandColor: "#58CC02",
     minBet: 15,
-    reward: 30,
+    reward: "3 mois Super Duolingo offerts",
     category: "education",
     duration: "30 jours",
   },
   {
-    id: "sponsored-3",
-    title: "Zéro fast-food pendant 3 semaines",
-    brandName: "HelloFresh",
-    brandLogo: "https://www.google.com/s2/favicons?domain=hellofresh.com&sz=128",
-    brandColor: "#99CC00",
-    minBet: 20,
-    reward: 35,
-    category: "nutrition",
-    duration: "21 jours",
-  },
-  {
-    id: "sponsored-4",
+    id: "sponsored-2",
     title: "Lire 4 livres ce mois",
     brandName: "Fnac",
     brandLogo: "https://www.google.com/s2/favicons?domain=fnac.com&sz=128",
     brandColor: "#E1A925",
     minBet: 20,
-    reward: 25,
+    reward: "-30% sur ta prochaine commande",
     category: "education",
     duration: "1 mois",
   },
   {
-    id: "sponsored-5",
-    title: "15 séances de yoga en 30 jours",
-    brandName: "Lululemon",
-    brandLogo: "https://www.google.com/s2/favicons?domain=lululemon.com&sz=128",
-    brandColor: "#D31334",
-    minBet: 25,
-    reward: 45,
-    category: "fitness",
-    duration: "30 jours",
-  },
-  {
-    id: "sponsored-6",
-    title: "Économiser 200€ ce mois",
+    id: "sponsored-3",
+    title: "Économiser 500€ ce mois",
     brandName: "Boursorama",
     brandLogo: "https://www.google.com/s2/favicons?domain=boursorama.com&sz=128",
     brandColor: "#0066B2",
     minBet: 10,
-    reward: 20,
+    reward: "6 mois Bourso Premium offerts",
     category: "finance",
     duration: "1 mois",
   },
   {
-    id: "sponsored-7",
-    title: "Marcher 10 000 pas/jour pendant 2 semaines",
-    brandName: "Decathlon",
-    brandLogo: "https://www.google.com/s2/favicons?domain=decathlon.com&sz=128",
-    brandColor: "#0082C3",
+    id: "sponsored-4",
+    title: "Faire 100 appels API ce mois",
+    brandName: "OpenAI",
+    brandLogo: "https://www.google.com/s2/favicons?domain=openai.com&sz=128",
+    brandColor: "#10A37F",
+    minBet: 25,
+    reward: "50$ de crédits API offerts",
+    category: "productivity",
+    duration: "1 mois",
+  },
+  {
+    id: "sponsored-5",
+    title: "Regarder 10 documentaires ce mois",
+    brandName: "Netflix",
+    brandLogo: "https://www.google.com/s2/favicons?domain=netflix.com&sz=128",
+    brandColor: "#E50914",
     minBet: 15,
-    reward: 30,
-    category: "fitness",
-    duration: "14 jours",
+    reward: "1 mois d'abonnement offert",
+    category: "entertainment",
+    duration: "1 mois",
+  },
+  {
+    id: "sponsored-6",
+    title: "Lire 5 livres Kindle ce mois",
+    brandName: "Amazon",
+    brandLogo: "https://www.google.com/s2/favicons?domain=amazon.com&sz=128",
+    brandColor: "#FF9900",
+    minBet: 20,
+    reward: "Bon d'achat 30€ offert",
+    category: "education",
+    duration: "1 mois",
   },
 ];
 
@@ -237,23 +230,23 @@ export default function ExploreScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
-        <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.header}>
+        <Animated.View entering={FadeInDown.delay(50).duration(400)} style={styles.header}>
           <Text style={styles.headerTitle}>Explorer</Text>
-          <Text style={styles.headerSubtitle}>Découvre les pacts de la communauté</Text>
+          <Text style={styles.headerSubtitle}>Trouve ton prochain défi</Text>
         </Animated.View>
 
         {/* Search */}
-        <Animated.View entering={FadeInDown.delay(100).springify()}>
+        <Animated.View entering={FadeInDown.delay(100).duration(400)}>
           <View style={[styles.searchContainer, isSearchFocused && styles.searchContainerFocused]}>
             <Ionicons
-              name="search"
-              size={22}
-              color={isSearchFocused ? Colors.textPrimary : Colors.textTertiary}
+              name="search-outline"
+              size={18}
+              color={isSearchFocused ? Colors.accent : Colors.textMuted}
             />
             <TextInput
               style={styles.searchInput}
               placeholder="Rechercher un pact..."
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={Colors.textMuted}
               value={searchQuery}
               onChangeText={setSearchQuery}
               onFocus={() => setIsSearchFocused(true)}
@@ -261,63 +254,86 @@ export default function ExploreScreen() {
               returnKeyType="search"
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery("")}>
-                <Ionicons name="close-circle" size={22} color={Colors.textTertiary} />
+              <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.searchClear}>
+                <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
               </TouchableOpacity>
             )}
           </View>
         </Animated.View>
 
         {/* Category Filter */}
-        <Animated.View entering={FadeInDown.delay(120).springify()} style={styles.categoryFilterRow}>
+        <Animated.View entering={FadeInDown.delay(120).duration(400)} style={styles.categoryFilterRow}>
           <TouchableOpacity
             onPress={() => setShowCategoryModal(true)}
             style={styles.categoryFilterButton}
           >
-            <Ionicons name="options-outline" size={20} color={Colors.textPrimary} />
+            <Ionicons name="options-outline" size={16} color={Colors.textSecondary} />
             <Text style={styles.categoryFilterText}>
-              {selectedCategory ? getCategoryName(selectedCategory) : "99+ catégories"}
+              {selectedCategory ? getCategoryName(selectedCategory) : "Toutes les catégories"}
             </Text>
-            <Ionicons name="chevron-down" size={18} color={Colors.textTertiary} />
+            <Ionicons name="chevron-down" size={16} color={Colors.textMuted} />
           </TouchableOpacity>
 
           {selectedCategory && (
             <TouchableOpacity onPress={clearCategory} style={styles.clearCategoryButton}>
-              <Ionicons name="close" size={20} color={Colors.textPrimary} />
+              <Ionicons name="close" size={16} color={Colors.danger} />
             </TouchableOpacity>
           )}
         </Animated.View>
 
-        {/* 1. PACTS SPONSORISÉS - First section with brand logos */}
-        <Animated.View entering={FadeInDown.delay(140).springify()} style={styles.sponsoredSection}>
+        {/* 1. Pacts Sponsorisés */}
+        <Animated.View entering={FadeInDown.delay(140).duration(400)} style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="star" size={18} color={Colors.accent} />
-            <Text style={styles.sectionTitle}>PACTS SPONSORISÉS</Text>
-            <View style={styles.sponsoredBadgeSmall}>
-              <Text style={styles.sponsoredBadgeSmallText}>Partenaires</Text>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="sparkles-outline" size={18} color={Colors.accent} />
+              <Text style={styles.sectionTitle}>Pacts sponsorisés</Text>
+            </View>
+            <View style={styles.partnerBadge}>
+              <Text style={styles.partnerBadgeText}>Partenaires</Text>
             </View>
           </View>
+
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.sponsoredList}
+            contentContainerStyle={styles.horizontalList}
           >
             {SPONSORED_CHALLENGES.map((challenge, index) => (
               <Animated.View
                 key={challenge.id}
-                entering={FadeInRight.delay(160 + index * 40).springify()}
+                entering={FadeInRight.delay(160 + index * 40).duration(300)}
               >
                 <TouchableOpacity
-                  style={[styles.sponsoredCard, { borderColor: challenge.brandColor }]}
-                  activeOpacity={0.85}
+                  style={styles.sponsoredCard}
+                  activeOpacity={0.9}
+                  onPress={() => router.push({
+                    pathname: "/join-sponsored",
+                    params: {
+                      id: challenge.id,
+                      title: challenge.title,
+                      brandName: challenge.brandName,
+                      brandLogo: challenge.brandLogo,
+                      brandColor: challenge.brandColor,
+                      minBet: challenge.minBet.toString(),
+                      reward: challenge.reward.toString(),
+                      category: challenge.category,
+                      duration: challenge.duration,
+                    }
+                  })}
                 >
-                  {/* Brand Logo Badge */}
-                  <View style={[styles.brandBadge, { backgroundColor: challenge.brandColor + "20", borderColor: challenge.brandColor }]}>
+                  {/* Centered Brand Section */}
+                  <View style={styles.brandCenterSection}>
                     <Image
                       source={{ uri: challenge.brandLogo }}
-                      style={styles.brandLogo}
+                      style={styles.brandLogoLarge}
                     />
-                    <Text style={[styles.brandName, { color: challenge.brandColor }]}>{challenge.brandName}</Text>
+                    <Text style={[styles.brandNameLarge, { color: challenge.brandColor }]}>
+                      {challenge.brandName}
+                    </Text>
+                    <View style={styles.partnerVerifiedBadge}>
+                      <Ionicons name="checkmark-circle" size={10} color={Colors.success} />
+                      <Text style={styles.partnerVerifiedText}>Partenaire</Text>
+                    </View>
                   </View>
 
                   <Text style={styles.sponsoredTitle} numberOfLines={2}>
@@ -331,14 +347,20 @@ export default function ExploreScreen() {
                     </View>
                   </View>
 
+                  {/* Reward Section with Gift Icon */}
+                  <View style={styles.sponsoredRewardSection}>
+                    <Ionicons name="gift-outline" size={16} color={Colors.success} />
+                    <Text style={styles.rewardTextCompact} numberOfLines={1}>{challenge.reward}</Text>
+                  </View>
+
                   <View style={styles.sponsoredFooter}>
                     <View style={styles.betSection}>
-                      <Text style={styles.betLabel}>Mise</Text>
+                      <Text style={styles.betLabel}>Mise min.</Text>
                       <Text style={styles.sponsoredBet}>{challenge.minBet}€</Text>
                     </View>
-                    <View style={styles.rewardBadge}>
-                      <Ionicons name="gift" size={14} color={Colors.success} />
-                      <Text style={styles.sponsoredReward}>+{challenge.reward}€</Text>
+                    <View style={styles.joinSponsoredButton}>
+                      <Text style={styles.joinSponsoredText}>Rejoindre</Text>
+                      <Ionicons name="arrow-forward" size={14} color={Colors.white} />
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -347,33 +369,36 @@ export default function ExploreScreen() {
           </ScrollView>
         </Animated.View>
 
-        {/* 2. IDÉES POPULAIRES - Horizontal scroll */}
-        <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.popularSection}>
+        {/* 2. Idées Populaires */}
+        <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="flame" size={18} color={Colors.danger} />
-            <Text style={styles.sectionTitle}>IDÉES POPULAIRES</Text>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="flame-outline" size={18} color={Colors.warning} />
+              <Text style={styles.sectionTitle}>Idées populaires</Text>
+            </View>
             <View style={styles.inspirationBadge}>
               <Text style={styles.inspirationBadgeText}>Inspiration</Text>
             </View>
           </View>
+
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.popularList}
+            contentContainerStyle={styles.horizontalList}
           >
             {POPULAR_CHALLENGES.map((challenge, index) => (
               <Animated.View
                 key={challenge.id}
-                entering={FadeInRight.delay(280 + index * 35).springify()}
+                entering={FadeInRight.delay(220 + index * 35).duration(300)}
               >
                 <TouchableOpacity
                   onPress={() => router.push({ pathname: "/create-challenge", params: { title: challenge.title, category: challenge.category, minBet: challenge.minBet } })}
                   style={styles.popularCard}
-                  activeOpacity={0.85}
+                  activeOpacity={0.9}
                 >
                   <View style={styles.popularHeader}>
                     <View style={styles.participantsBadge}>
-                      <Ionicons name="people" size={12} color={Colors.info} />
+                      <Ionicons name="people-outline" size={12} color={Colors.textSecondary} />
                       <Text style={styles.participantsText}>{challenge.participants.toLocaleString()}</Text>
                     </View>
                   </View>
@@ -384,7 +409,7 @@ export default function ExploreScreen() {
 
                   <View style={styles.popularFooter}>
                     <View style={styles.categoryBadge}>
-                      <Text style={styles.challengeCategory}>
+                      <Text style={styles.categoryBadgeText}>
                         {getCategoryName(challenge.category)}
                       </Text>
                     </View>
@@ -396,27 +421,32 @@ export default function ExploreScreen() {
           </ScrollView>
         </Animated.View>
 
-        {/* 3. PACTS COMMUNAUTAIRES - Real joinable pacts */}
-        <Animated.View entering={FadeInDown.delay(260).springify()} style={styles.communitySection}>
+        {/* 3. Pacts Communautaires */}
+        <Animated.View entering={FadeInDown.delay(260).duration(400)} style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="globe" size={18} color={Colors.info} />
-            <Text style={styles.sectionTitle}>PACTS COMMUNAUTAIRES</Text>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="globe-outline" size={18} color={Colors.info} />
+              <Text style={styles.sectionTitle}>Pacts communautaires</Text>
+            </View>
           </View>
 
           {challenges === undefined ? (
-            <ActivityIndicator color={Colors.info} style={{ padding: Spacing.lg }} />
+            <ActivityIndicator color={Colors.accent} style={{ padding: Spacing.lg }} />
           ) : filteredChallenges.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Ionicons name="rocket-outline" size={32} color={Colors.accent} />
+              <View style={styles.emptyIconBox}>
+                <Ionicons name="rocket-outline" size={28} color={Colors.accent} />
+              </View>
+              <Text style={styles.emptyCardTitle}>Aucun pact disponible</Text>
               <Text style={styles.emptyCardText}>
-                Aucun pact disponible pour le moment
+                Sois le premier à créer un défi
               </Text>
               <View style={styles.emptyCardActions}>
                 <TouchableOpacity
                   onPress={() => router.push("/create-challenge")}
                   style={styles.createPactButton}
                 >
-                  <Ionicons name="add" size={18} color={Colors.black} />
+                  <Ionicons name="add" size={18} color={Colors.white} />
                   <Text style={styles.createPactButtonText}>Créer un pact</Text>
                 </TouchableOpacity>
                 {userId && (
@@ -426,11 +456,11 @@ export default function ExploreScreen() {
                     style={styles.seedDemoButton}
                   >
                     {isSeeding ? (
-                      <ActivityIndicator size="small" color={Colors.info} />
+                      <ActivityIndicator size="small" color={Colors.accent} />
                     ) : (
                       <>
-                        <Ionicons name="sparkles" size={18} color={Colors.info} />
-                        <Text style={styles.seedDemoButtonText}>Charger démos</Text>
+                        <Ionicons name="sparkles-outline" size={16} color={Colors.accent} />
+                        <Text style={styles.seedDemoButtonText}>Démos</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -442,12 +472,12 @@ export default function ExploreScreen() {
               {filteredChallenges.slice(0, 10).map((challenge: any, index: number) => (
                 <Animated.View
                   key={challenge._id}
-                  entering={FadeInUp.delay(280 + index * 40).springify()}
+                  entering={FadeInUp.delay(280 + index * 40).duration(300)}
                 >
                   <TouchableOpacity
                     onPress={() => handleJoinChallenge(challenge._id)}
                     style={styles.challengeCard}
-                    activeOpacity={0.85}
+                    activeOpacity={0.9}
                   >
                     <View style={styles.challengeMain}>
                       <Text style={styles.challengeTitle} numberOfLines={2}>
@@ -455,13 +485,13 @@ export default function ExploreScreen() {
                       </Text>
                       <View style={styles.challengeMeta}>
                         <View style={styles.categoryBadge}>
-                          <Text style={styles.challengeCategory}>
+                          <Text style={styles.categoryBadgeText}>
                             {getCategoryName(challenge.category)}
                           </Text>
                         </View>
-                        <View style={styles.participantsBadge}>
-                          <Ionicons name="people" size={12} color={Colors.info} />
-                          <Text style={styles.participantsText}>
+                        <View style={styles.participantsBadgeSmall}>
+                          <Ionicons name="people-outline" size={12} color={Colors.textTertiary} />
+                          <Text style={styles.participantsTextSmall}>
                             {challenge.currentParticipants || 0}
                           </Text>
                         </View>
@@ -470,7 +500,7 @@ export default function ExploreScreen() {
                     <View style={styles.challengeRight}>
                       <Text style={styles.challengeBet}>{challenge.minBet}€</Text>
                       <View style={styles.joinArrow}>
-                        <Ionicons name="arrow-forward" size={20} color={Colors.black} />
+                        <Ionicons name="arrow-forward" size={16} color={Colors.white} />
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -480,38 +510,46 @@ export default function ExploreScreen() {
           )}
         </Animated.View>
 
-        {/* 4. PACTS DE MES AMIS */}
-        <Animated.View entering={FadeInDown.delay(260).springify()} style={styles.friendsSection}>
+        {/* 4. Pacts de mes amis */}
+        <Animated.View entering={FadeInDown.delay(300).duration(400)} style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="people" size={18} color={Colors.info} />
-            <Text style={styles.sectionTitle}>PACTS DE MES AMIS</Text>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="people-outline" size={18} color={Colors.accent} />
+              <Text style={styles.sectionTitle}>Pacts de mes amis</Text>
+            </View>
           </View>
 
           {!userId ? (
             <View style={styles.friendsEmptyCard}>
-              <Ionicons name="person-add-outline" size={32} color={Colors.textTertiary} />
+              <View style={styles.emptyIconBox}>
+                <Ionicons name="person-add-outline" size={28} color={Colors.textTertiary} />
+              </View>
+              <Text style={styles.friendsEmptyTitle}>Connexion requise</Text>
               <Text style={styles.friendsEmptyText}>Connecte-toi pour voir les pacts de tes amis</Text>
               <TouchableOpacity
                 onPress={() => router.push("/auth")}
-                style={styles.friendsConnectButton}
+                style={styles.connectButton}
               >
-                <Text style={styles.friendsConnectButtonText}>Se connecter</Text>
+                <Text style={styles.connectButtonText}>Se connecter</Text>
               </TouchableOpacity>
             </View>
           ) : friendsChallenges === undefined ? (
-            <ActivityIndicator color={Colors.info} style={{ padding: Spacing.lg }} />
+            <ActivityIndicator color={Colors.accent} style={{ padding: Spacing.lg }} />
           ) : filteredFriendsChallenges.length === 0 ? (
             <View style={styles.friendsEmptyCard}>
-              <Ionicons name="people-outline" size={32} color={Colors.textTertiary} />
+              <View style={styles.emptyIconBox}>
+                <Ionicons name="people-outline" size={28} color={Colors.textTertiary} />
+              </View>
+              <Text style={styles.friendsEmptyTitle}>Aucun ami</Text>
               <Text style={styles.friendsEmptyText}>
-                Ajoute des amis depuis ton profil pour voir leurs pacts ici!
+                Ajoute des amis depuis ton profil
               </Text>
               <TouchableOpacity
                 onPress={() => router.push("/(tabs)/profile")}
-                style={styles.friendsAddButton}
+                style={styles.addFriendsButton}
               >
-                <Ionicons name="person-add" size={18} color={Colors.info} />
-                <Text style={styles.friendsAddButtonText}>Ajouter des amis</Text>
+                <Ionicons name="person-add-outline" size={16} color={Colors.accent} />
+                <Text style={styles.addFriendsButtonText}>Ajouter des amis</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -519,15 +557,15 @@ export default function ExploreScreen() {
               {filteredFriendsChallenges.map((challenge: any, index: number) => (
                 <Animated.View
                   key={challenge._id}
-                  entering={FadeInUp.delay(280 + index * 40).springify()}
+                  entering={FadeInUp.delay(320 + index * 40).duration(300)}
                 >
                   <TouchableOpacity
                     onPress={() => handleJoinChallenge(challenge._id)}
                     style={styles.friendChallengeCard}
-                    activeOpacity={0.85}
+                    activeOpacity={0.9}
                   >
                     <View style={styles.friendsIndicator}>
-                      <Ionicons name="people" size={14} color={Colors.info} />
+                      <Ionicons name="people" size={12} color={Colors.accent} />
                       <Text style={styles.friendsIndicatorText}>
                         {challenge.friendsCount} ami{challenge.friendsCount > 1 ? "s" : ""}
                       </Text>
@@ -538,7 +576,7 @@ export default function ExploreScreen() {
                       </Text>
                       <View style={styles.challengeMeta}>
                         <View style={styles.categoryBadge}>
-                          <Text style={styles.challengeCategory}>
+                          <Text style={styles.categoryBadgeText}>
                             {getCategoryName(challenge.category)}
                           </Text>
                         </View>
@@ -546,8 +584,8 @@ export default function ExploreScreen() {
                     </View>
                     <View style={styles.challengeRight}>
                       <Text style={styles.challengeBet}>{challenge.minBet}€</Text>
-                      <View style={[styles.joinArrow, styles.joinArrowFriends]}>
-                        <Ionicons name="arrow-forward" size={20} color={Colors.textPrimary} />
+                      <View style={styles.joinArrowAccent}>
+                        <Ionicons name="arrow-forward" size={16} color={Colors.accent} />
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -556,7 +594,6 @@ export default function ExploreScreen() {
             </View>
           )}
         </Animated.View>
-
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -581,159 +618,216 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingTop: Spacing.lg,
+    paddingTop: Spacing.md,
   },
+
+  // Header
   header: {
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.xl,
   },
   headerTitle: {
-    fontSize: 32,
-    fontWeight: "800",
+    fontSize: 28,
+    fontWeight: "600",
     color: Colors.textPrimary,
+    marginBottom: Spacing.xs,
   },
   headerSubtitle: {
-    ...Typography.bodyMedium,
+    fontSize: 15,
+    fontWeight: "400",
     color: Colors.textTertiary,
-    marginTop: Spacing.xs,
   },
+
+  // Search
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surfaceElevated,
-    marginHorizontal: Spacing.xl,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.xl,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    gap: Spacing.sm,
+    backgroundColor: Colors.surface,
+    marginHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     marginBottom: Spacing.md,
+    gap: Spacing.sm,
+    ...Shadows.xs,
   },
   searchContainerFocused: {
+    borderWidth: 1,
     borderColor: Colors.accent,
   },
   searchInput: {
     flex: 1,
-    ...Typography.bodyLarge,
+    fontSize: 15,
+    fontWeight: "400",
     color: Colors.textPrimary,
-    padding: 0,
   },
+  searchClear: {
+    padding: Spacing.xs,
+  },
+
+  // Category Filter
   categoryFilterRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.xl,
     gap: Spacing.sm,
   },
   categoryFilterButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surfaceElevated,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     gap: Spacing.sm,
+    ...Shadows.xs,
   },
   categoryFilterText: {
-    ...Typography.labelMedium,
+    fontSize: 14,
+    fontWeight: "500",
     color: Colors.textPrimary,
   },
   clearCategoryButton: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
+    backgroundColor: Colors.dangerMuted,
     borderRadius: BorderRadius.full,
-    backgroundColor: Colors.surfaceElevated,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
-  // Section Header
+
+  // Sections
+  section: {
+    marginBottom: Spacing.xl,
+  },
   sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+  },
+  sectionTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
-    paddingHorizontal: Spacing.xl,
-    marginBottom: Spacing.lg,
   },
   sectionTitle: {
-    ...Typography.labelSmall,
-    color: Colors.textTertiary,
-    letterSpacing: 1.5,
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.textPrimary,
   },
-  // Sponsored Section
-  sponsoredSection: {
-    marginBottom: Spacing.xxl,
-  },
-  sponsoredList: {
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
-  },
-  sponsoredBadgeSmall: {
-    backgroundColor: Colors.accent + "20",
+  partnerBadge: {
+    backgroundColor: Colors.accentMuted,
+    borderRadius: BorderRadius.full,
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
-    marginLeft: "auto",
+    paddingVertical: 4,
   },
-  sponsoredBadgeSmallText: {
-    ...Typography.labelSmall,
+  partnerBadgeText: {
+    fontSize: 11,
+    fontWeight: "500",
     color: Colors.accent,
-    fontSize: 10,
   },
+  inspirationBadge: {
+    backgroundColor: Colors.warningMuted,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+  },
+  inspirationBadgeText: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: Colors.warning,
+  },
+  horizontalList: {
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
+  },
+
+  // Sponsored Cards
   sponsoredCard: {
-    width: 260,
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    borderWidth: 2,
-    marginRight: Spacing.md,
-    ...Shadows.md,
+    width: 220,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginRight: Spacing.sm,
+    ...Shadows.sm,
+  },
+  brandCenterSection: {
+    alignItems: "center",
+    marginBottom: Spacing.lg,
+    paddingTop: Spacing.sm,
+  },
+  brandLogoLarge: {
+    width: 48,
+    height: 48,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
+    backgroundColor: Colors.surfaceHighlight,
+  },
+  brandNameLarge: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: Spacing.xs,
+  },
+  partnerVerifiedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  partnerVerifiedText: {
+    fontSize: 10,
+    fontWeight: "500",
+    color: Colors.success,
   },
   brandBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
     alignSelf: "flex-start",
     marginBottom: Spacing.md,
-    gap: Spacing.sm,
-    borderWidth: 1,
+    gap: Spacing.xs,
   },
   brandLogo: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
+    width: 16,
+    height: 16,
+    borderRadius: BorderRadius.full,
   },
   brandName: {
-    fontSize: 13,
-    fontWeight: "800",
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontWeight: "600",
   },
   sponsoredTitle: {
-    fontSize: 16,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "500",
     color: Colors.textPrimary,
     marginBottom: Spacing.sm,
-    minHeight: 42,
-    lineHeight: 21,
+    minHeight: 36,
+    lineHeight: 18,
+    textAlign: "center",
   },
   sponsoredMeta: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     marginBottom: Spacing.md,
   },
   durationBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+    backgroundColor: Colors.surfaceHighlight,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
   },
   durationText: {
-    ...Typography.labelSmall,
+    fontSize: 12,
+    fontWeight: "400",
     color: Colors.textTertiary,
   },
   sponsoredFooter: {
@@ -746,112 +840,95 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   betLabel: {
-    ...Typography.labelSmall,
-    color: Colors.textTertiary,
-    fontSize: 10,
+    fontSize: 11,
+    fontWeight: "400",
+    color: Colors.textMuted,
   },
   sponsoredBet: {
-    fontSize: 20,
-    fontWeight: "800",
+    fontSize: 18,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
-  rewardBadge: {
+  rewardBox: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: Colors.successMuted,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
     borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    borderColor: Colors.success,
-    gap: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    gap: 4,
   },
   sponsoredReward: {
-    fontSize: 14,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "600",
     color: Colors.success,
   },
-  // Community Section
-  communitySection: {
-    marginBottom: Spacing.xxl,
-  },
-  emptyCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.xxl,
-    marginHorizontal: Spacing.xl,
-    alignItems: "center",
-    gap: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  emptyCardText: {
-    ...Typography.bodyMedium,
-    color: Colors.textTertiary,
-    textAlign: "center",
-  },
-  emptyCardActions: {
-    flexDirection: "row",
-    gap: Spacing.md,
-    marginTop: Spacing.md,
-  },
-  seedDemoButton: {
+  sponsoredRewardSection: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.infoMuted,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
+    justifyContent: "center",
+    backgroundColor: Colors.successMuted,
     borderRadius: BorderRadius.full,
-    gap: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.info,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+    gap: Spacing.xs,
+    alignSelf: "center",
   },
-  seedDemoButtonText: {
-    ...Typography.labelMedium,
-    color: Colors.info,
+  rewardAmountCompact: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.success,
   },
-  createPactButton: {
+  rewardTextCompact: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: Colors.success,
+    flex: 1,
+  },
+  rewardIconBox: {
+    width: 40,
+    height: 40,
+    backgroundColor: Colors.success,
+    borderRadius: BorderRadius.full,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  rewardTextBox: {
+    flex: 1,
+  },
+  rewardLabelText: {
+    fontSize: 11,
+    fontWeight: "400",
+    color: Colors.success,
+  },
+  rewardAmountBig: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: Colors.success,
+  },
+  joinSponsoredButton: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: Colors.accent,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.full,
-    gap: Spacing.sm,
-    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.xs,
   },
-  createPactButtonText: {
-    ...Typography.labelMedium,
-    color: Colors.black,
+  joinSponsoredText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.white,
   },
-  inspirationBadge: {
-    backgroundColor: Colors.dangerMuted,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
-    marginLeft: "auto",
-  },
-  inspirationBadgeText: {
-    ...Typography.labelSmall,
-    color: Colors.danger,
-    fontSize: 10,
-  },
-  // Popular Section - Horizontal
-  popularSection: {
-    marginBottom: Spacing.xxl,
-  },
-  popularList: {
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
-  },
+
+  // Popular Cards
   popularCard: {
-    width: 180,
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginRight: Spacing.md,
+    width: 160,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginRight: Spacing.sm,
     minHeight: 140,
     ...Shadows.sm,
   },
@@ -862,66 +939,58 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: Colors.infoMuted,
+    backgroundColor: Colors.surfaceHighlight,
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
     alignSelf: "flex-start",
   },
   participantsText: {
     fontSize: 11,
-    fontWeight: "700",
-    color: Colors.info,
+    fontWeight: "500",
+    color: Colors.textSecondary,
   },
   popularTitle: {
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "500",
     color: Colors.textPrimary,
     marginBottom: Spacing.md,
     flex: 1,
-    lineHeight: 19,
+    lineHeight: 18,
   },
   popularFooter: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
+  categoryBadge: {
+    backgroundColor: Colors.surfaceHighlight,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  categoryBadgeText: {
+    fontSize: 11,
+    fontWeight: "400",
+    color: Colors.textSecondary,
+  },
   popularBet: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: Colors.success,
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.accent,
   },
-  // Loading & Empty
-  loadingSection: {
-    padding: Spacing.huge,
-    alignItems: "center",
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: Spacing.huge,
-    gap: Spacing.md,
-  },
-  emptyStateTitle: {
-    ...Typography.headlineSmall,
-    color: Colors.textPrimary,
-  },
-  emptyStateText: {
-    ...Typography.bodyMedium,
-    color: Colors.textTertiary,
-  },
-  // Challenge Cards - BIGGER
+
+  // Challenge Cards
   challengesList: {
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
   },
   challengeCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
     ...Shadows.sm,
   },
   challengeMain: {
@@ -929,122 +998,186 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   challengeTitle: {
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 15,
+    fontWeight: "500",
     color: Colors.textPrimary,
-    lineHeight: 24,
+    lineHeight: 20,
   },
   challengeMeta: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
   },
-  categoryBadge: {
-    backgroundColor: Colors.surfaceHighlight,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.sm,
+  participantsBadgeSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
-  challengeCategory: {
-    ...Typography.labelSmall,
-    color: Colors.textSecondary,
+  participantsTextSmall: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: Colors.textTertiary,
   },
   challengeRight: {
     alignItems: "flex-end",
     gap: Spacing.sm,
   },
   challengeBet: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: Colors.success,
+    fontSize: 18,
+    fontWeight: "600",
+    color: Colors.accent,
   },
   joinArrow: {
-    width: 36,
-    height: 36,
-    borderRadius: BorderRadius.md,
+    width: 32,
+    height: 32,
     backgroundColor: Colors.accent,
+    borderRadius: BorderRadius.full,
     justifyContent: "center",
     alignItems: "center",
   },
-  bottomSpacer: {
-    height: 120,
-  },
-  // Empty states
-  emptyStateSmall: {
+  joinArrowAccent: {
+    width: 32,
+    height: 32,
+    backgroundColor: Colors.accentMuted,
+    borderRadius: BorderRadius.full,
+    justifyContent: "center",
     alignItems: "center",
-    paddingVertical: Spacing.xl,
-    paddingHorizontal: Spacing.xl,
   },
-  // Friends section
-  friendsSection: {
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  friendsEmptyCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.xxl,
-    marginHorizontal: Spacing.xl,
+
+  // Empty States
+  emptyCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+    marginHorizontal: Spacing.lg,
     alignItems: "center",
     gap: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    ...Shadows.sm,
   },
-  friendsEmptyText: {
-    ...Typography.bodyMedium,
+  emptyIconBox: {
+    width: 56,
+    height: 56,
+    backgroundColor: Colors.accentMuted,
+    borderRadius: BorderRadius.full,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyCardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+  },
+  emptyCardText: {
+    fontSize: 14,
+    fontWeight: "400",
     color: Colors.textTertiary,
     textAlign: "center",
   },
-  friendsConnectButton: {
-    backgroundColor: Colors.textPrimary,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: BorderRadius.full,
+  emptyCardActions: {
+    flexDirection: "row",
+    gap: Spacing.sm,
     marginTop: Spacing.sm,
   },
-  friendsConnectButtonText: {
-    ...Typography.labelMedium,
-    color: Colors.black,
-  },
-  friendsAddButton: {
+  createPactButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.infoMuted,
+    backgroundColor: Colors.accent,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.full,
+    gap: Spacing.xs,
+  },
+  createPactButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.white,
+  },
+  seedDemoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.accentMuted,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.full,
+    gap: Spacing.xs,
+  },
+  seedDemoButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.accent,
+  },
+
+  // Friends Section
+  friendsEmptyCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+    marginHorizontal: Spacing.lg,
+    alignItems: "center",
+    gap: Spacing.md,
+    ...Shadows.sm,
+  },
+  friendsEmptyTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+  },
+  friendsEmptyText: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: Colors.textTertiary,
+    textAlign: "center",
+  },
+  connectButton: {
+    backgroundColor: Colors.accent,
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.full,
-    gap: Spacing.sm,
     marginTop: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.info,
   },
-  friendsAddButtonText: {
-    ...Typography.labelMedium,
-    color: Colors.info,
+  connectButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.white,
+  },
+  addFriendsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.accentMuted,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.full,
+    gap: Spacing.xs,
+    marginTop: Spacing.sm,
+  },
+  addFriendsButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.accent,
   },
   friendsChallengesList: {
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.sm,
   },
   friendChallengeCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.xl,
-    borderWidth: 1,
-    borderColor: Colors.info,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
     ...Shadows.sm,
   },
   friendsIndicator: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.xs,
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   friendsIndicatorText: {
-    ...Typography.labelSmall,
-    color: Colors.info,
+    fontSize: 12,
+    fontWeight: "500",
+    color: Colors.accent,
   },
-  joinArrowFriends: {
-    backgroundColor: Colors.infoMuted,
+
+  bottomSpacer: {
+    height: 120,
   },
 });

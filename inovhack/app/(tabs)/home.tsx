@@ -1,3 +1,8 @@
+/**
+ * PACT Home Screen - Clean & Minimal
+ * Inspired by Luma's elegant simplicity
+ */
+
 import React, { useState } from "react";
 import {
   View,
@@ -26,30 +31,25 @@ import Animated, {
   FadeInUp,
   SlideInDown,
   ZoomIn,
-  BounceIn,
   FadeIn,
-  FadeOut,
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
-  withSequence,
   withTiming,
-  withRepeat,
   Easing,
   runOnJS,
 } from "react-native-reanimated";
-import { useEffect } from "react";
 import { getCategoryName } from "../../constants/categories";
 import {
   Colors,
   Spacing,
   BorderRadius,
-  Typography,
+  BorderWidth,
   Shadows,
 } from "../../constants/theme";
 import StatsCard from "../../components/StatsCard";
 import StreakCalendar from "../../components/StreakCalendar";
 import ActivityFeed from "../../components/ActivityFeed";
+import Countdown from "../../components/Countdown";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -67,11 +67,11 @@ const MOCK_STATS = {
 const MOCK_COMPLETED_DAYS = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 15, 16, 17];
 
 const MOCK_ACTIVITIES = [
-  { id: "1", userName: "Marie", action: "completed" as const, challengeTitle: "Sport 4x/semaine", timeAgo: "il y a 2min" },
-  { id: "2", userName: "Lucas", action: "won" as const, challengeTitle: "Pas d'alcool", amount: 50, timeAgo: "il y a 15min" },
-  { id: "3", userName: "Emma", action: "joined" as const, challengeTitle: "Méditation", timeAgo: "il y a 1h" },
-  { id: "4", userName: "Thomas", action: "completed" as const, challengeTitle: "Lecture", timeAgo: "il y a 2h" },
-  { id: "5", userName: "Julie", action: "failed" as const, challengeTitle: "Se lever tôt", amount: 20, timeAgo: "il y a 3h" },
+  { id: "1", userName: "Marie", action: "completed" as const, challengeTitle: "Sport 4x/semaine", timeAgo: "2min" },
+  { id: "2", userName: "Lucas", action: "won" as const, challengeTitle: "Pas d'alcool", amount: 50, timeAgo: "15min" },
+  { id: "3", userName: "Emma", action: "joined" as const, challengeTitle: "Méditation", timeAgo: "1h" },
+  { id: "4", userName: "Thomas", action: "completed" as const, challengeTitle: "Lecture", timeAgo: "2h" },
+  { id: "5", userName: "Julie", action: "failed" as const, challengeTitle: "Se lever tôt", amount: 20, timeAgo: "3h" },
 ];
 
 export default function HomeScreen() {
@@ -81,18 +81,15 @@ export default function HomeScreen() {
   const [inviteCode, setInviteCode] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [showWelcome, setShowWelcome] = useState(true); // Force welcome screen to stay
+  const [showWelcome, setShowWelcome] = useState(true);
 
-  // Get user's active participations
   const participations = useQuery(
     api.participations.getMyParticipations,
     userId ? { userId } : "skip"
   );
 
-  // Filter active pacts
   const activePacts = participations?.filter((p: any) => p.status === "active") || [];
 
-  // Query for challenge by invite code (only when we have a 6-digit code)
   const challengeByCode = useQuery(
     api.challenges.getChallengeByInviteCode,
     inviteCode.length === 6 ? { inviteCode } : "skip"
@@ -105,7 +102,6 @@ export default function HomeScreen() {
     }
 
     setIsSearching(true);
-
     setTimeout(() => {
       if (challengeByCode) {
         setShowJoinModal(false);
@@ -129,7 +125,6 @@ export default function HomeScreen() {
     router.push({ pathname: "/submit-proof", params: { participationId } });
   };
 
-  // Smooth transition animation
   const welcomeOpacity = useSharedValue(1);
 
   const welcomeContainerStyle = useAnimatedStyle(() => ({
@@ -138,22 +133,20 @@ export default function HomeScreen() {
 
   const handleCommencer = () => {
     setIsTransitioning(true);
-    welcomeOpacity.value = withTiming(0, { duration: 400, easing: Easing.out(Easing.ease) }, () => {
+    welcomeOpacity.value = withTiming(0, { duration: 300, easing: Easing.out(Easing.ease) }, () => {
       runOnJS(setShowWelcome)(false);
-      // If user exists, just hide welcome. If not, go to auth.
       if (!user) {
         runOnJS(router.push)("/auth");
       }
     });
   };
 
-  // Show welcome screen until user clicks "Commencer"
+  // Welcome Screen
   if (showWelcome) {
     return (
       <SafeAreaView style={styles.container}>
         <Animated.View style={[styles.welcomeContainer, welcomeContainerStyle]}>
-          {/* Logo centered with smooth zoom */}
-          <Animated.View entering={ZoomIn.delay(200).duration(800).springify()}>
+          <Animated.View entering={ZoomIn.delay(100).duration(600)}>
             <Image
               source={require("../../assets/images/logo_big.png")}
               style={styles.logoImage}
@@ -161,16 +154,15 @@ export default function HomeScreen() {
             />
           </Animated.View>
 
-          {/* CTA button right below logo */}
-          <Animated.View entering={FadeInUp.delay(600).duration(500).springify()}>
+          <Animated.View entering={FadeInUp.delay(400).duration(400)}>
             <TouchableOpacity
               onPress={handleCommencer}
-              style={styles.authButton}
+              style={styles.ctaButton}
               activeOpacity={0.8}
               disabled={isTransitioning}
             >
-              <Text style={styles.authButtonText}>Commencer</Text>
-              <Ionicons name="arrow-forward" size={20} color={Colors.black} />
+              <Text style={styles.ctaButtonText}>Commencer</Text>
+              <Ionicons name="arrow-forward" size={20} color={Colors.white} />
             </TouchableOpacity>
           </Animated.View>
         </Animated.View>
@@ -178,35 +170,23 @@ export default function HomeScreen() {
     );
   }
 
-  // Show loading only after welcome is dismissed
+  // Loading
   if (authLoading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.centered}>
-          <Animated.Text
-            entering={ZoomIn.duration(800).springify()}
-            style={styles.logo}
-          >
-            PACT
-          </Animated.Text>
-          <Animated.View entering={FadeIn.delay(600).duration(400)}>
-            <View style={styles.loadingDots}>
-              <Animated.View entering={BounceIn.delay(700)} style={styles.loadingDot} />
-              <Animated.View entering={BounceIn.delay(800)} style={styles.loadingDot} />
-              <Animated.View entering={BounceIn.delay(900)} style={styles.loadingDot} />
-            </View>
-          </Animated.View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color={Colors.accent} size="large" />
         </View>
       </SafeAreaView>
     );
   }
 
-  // If not logged in after welcome, redirect to auth
   if (!user) {
     router.replace("/auth");
     return null;
   }
 
+  // Main Home
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
@@ -214,105 +194,93 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header with Balance */}
-        <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.header}>
-          <Text style={styles.greeting}>Hey {user.name.split(" ")[0]} 👋</Text>
+        {/* Header */}
+        <Animated.View entering={FadeInDown.delay(50).duration(400)} style={styles.header}>
+          <View>
+            <Text style={styles.greetingLabel}>Bienvenue</Text>
+            <Text style={styles.greetingName}>{user.name.split(" ")[0]}</Text>
+          </View>
           <TouchableOpacity
             onPress={() => router.push("/(tabs)/profile")}
-            style={styles.balanceChip}
+            style={styles.balanceBox}
             activeOpacity={0.8}
           >
-            <Ionicons name="wallet" size={18} color={Colors.success} />
-            <Text style={styles.balanceText}>{user.balance.toFixed(0)}€</Text>
+            <Text style={styles.balanceAmount}>{user.balance.toFixed(0)}€</Text>
+            <Text style={styles.balanceLabel}>Solde</Text>
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Stats Card - Level & XP */}
+        {/* Stats Card */}
         <StatsCard {...MOCK_STATS} userName={user.name.split(" ")[0]} />
 
-        {/* Main Actions - Moved to middle */}
-        <View style={styles.actionsContainer}>
-          {/* Créer un Pact - BIG BUTTON */}
-          <Animated.View entering={FadeInDown.delay(150).springify()}>
+        {/* Actions */}
+        <View style={styles.actionsSection}>
+          <Animated.View entering={FadeInDown.delay(100).duration(400)}>
             <TouchableOpacity
               onPress={() => router.push("/create-challenge")}
-              style={styles.mainButton}
-              activeOpacity={0.85}
+              style={styles.primaryAction}
+              activeOpacity={0.8}
             >
-              <View style={styles.mainButtonIcon}>
-                <Ionicons name="add" size={32} color={Colors.black} />
+              <View style={styles.primaryActionIcon}>
+                <Ionicons name="add" size={24} color={Colors.white} />
               </View>
-              <View style={styles.mainButtonTextContainer}>
-                <Text style={styles.mainButtonText}>Créer un Pact</Text>
-                <Text style={styles.mainButtonSubtext}>Défie-toi ou tes amis</Text>
+              <View style={styles.primaryActionText}>
+                <Text style={styles.primaryActionTitle}>Créer un pact</Text>
+                <Text style={styles.primaryActionSub}>Défie-toi ou tes amis</Text>
               </View>
+              <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
             </TouchableOpacity>
           </Animated.View>
 
-          {/* Rejoindre un Pact - BIG BUTTON that expands */}
-          <Animated.View entering={FadeInDown.delay(200).springify()}>
+          <Animated.View entering={FadeInDown.delay(150).duration(400)}>
             <TouchableOpacity
               onPress={() => setShowJoinOptions(!showJoinOptions)}
-              style={[styles.mainButton, styles.joinMainButton]}
-              activeOpacity={0.85}
+              style={styles.secondaryAction}
+              activeOpacity={0.8}
             >
-              <View style={[styles.mainButtonIcon, styles.joinMainButtonIcon]}>
-                <Ionicons name="people" size={32} color={Colors.textPrimary} />
+              <View style={styles.secondaryActionIcon}>
+                <Ionicons name="people-outline" size={22} color={Colors.textSecondary} />
               </View>
-              <View style={styles.mainButtonTextContainer}>
-                <Text style={[styles.mainButtonText, styles.joinMainButtonText]}>Rejoindre un Pact</Text>
-                <Text style={styles.mainButtonSubtext}>Communauté ou amis</Text>
+              <View style={styles.secondaryActionText}>
+                <Text style={styles.secondaryActionTitle}>Rejoindre un pact</Text>
+                <Text style={styles.secondaryActionSub}>Communauté ou amis</Text>
               </View>
               <Ionicons
                 name={showJoinOptions ? "chevron-up" : "chevron-down"}
-                size={24}
-                color={Colors.textSecondary}
+                size={20}
+                color={Colors.textMuted}
               />
             </TouchableOpacity>
           </Animated.View>
 
-          {/* Join Options - Expandable */}
           {showJoinOptions && (
-            <Animated.View
-              entering={FadeInDown.duration(200).springify()}
-              style={styles.joinOptionsContainer}
-            >
-              {/* Pact Communautaire */}
+            <Animated.View entering={FadeInDown.duration(200)} style={styles.joinOptions}>
               <TouchableOpacity
                 onPress={() => {
                   setShowJoinOptions(false);
                   router.push("/(tabs)/explore" as any);
                 }}
-                style={styles.joinOptionButton}
-                activeOpacity={0.85}
+                style={styles.joinOption}
+                activeOpacity={0.7}
               >
-                <View style={styles.joinOptionIcon}>
-                  <Ionicons name="globe" size={24} color={Colors.info} />
-                </View>
-                <View style={styles.joinOptionTextContainer}>
-                  <Text style={styles.joinOptionText}>Pact Communautaire</Text>
-                  <Text style={styles.joinOptionSubtext}>Rejoins des inconnus</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
+                <Ionicons name="globe-outline" size={20} color={Colors.textSecondary} />
+                <Text style={styles.joinOptionText}>Explorer la communauté</Text>
+                <Ionicons name="arrow-forward" size={16} color={Colors.textMuted} />
               </TouchableOpacity>
 
-              {/* Pact Entre Amis */}
+              <View style={styles.joinOptionDivider} />
+
               <TouchableOpacity
                 onPress={() => {
                   setShowJoinOptions(false);
                   setShowJoinModal(true);
                 }}
-                style={styles.joinOptionButton}
-                activeOpacity={0.85}
+                style={styles.joinOption}
+                activeOpacity={0.7}
               >
-                <View style={[styles.joinOptionIcon, styles.joinOptionIconFriends]}>
-                  <Ionicons name="heart" size={24} color={Colors.accent} />
-                </View>
-                <View style={styles.joinOptionTextContainer}>
-                  <Text style={styles.joinOptionText}>Pact Entre Amis</Text>
-                  <Text style={styles.joinOptionSubtext}>Code à 6 chiffres</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
+                <Ionicons name="key-outline" size={20} color={Colors.textSecondary} />
+                <Text style={styles.joinOptionText}>Entrer un code ami</Text>
+                <Ionicons name="arrow-forward" size={16} color={Colors.textMuted} />
               </TouchableOpacity>
             </Animated.View>
           )}
@@ -324,36 +292,38 @@ export default function HomeScreen() {
         {/* Streak Calendar */}
         <StreakCalendar completedDays={MOCK_COMPLETED_DAYS} currentStreak={MOCK_STATS.streak} />
 
-        {/* Active Pacts Section - TOP PRIORITY */}
+        {/* Active Pacts */}
         {activePacts.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.activePactsSection}>
-            <Text style={styles.sectionLabel}>MES PACTS EN COURS</Text>
-            <View style={styles.activePactsList}>
+          <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.pactsSection}>
+            <Text style={styles.sectionTitle}>Pacts actifs</Text>
+            <View style={styles.pactsList}>
               {activePacts.map((pact: any, index: number) => (
                 <Animated.View
                   key={pact._id}
-                  entering={SlideInDown.delay(150 + index * 50).springify()}
+                  entering={FadeInDown.delay(250 + index * 50).duration(300)}
                 >
                   <TouchableOpacity
                     onPress={() => handleSubmitProof(pact._id)}
-                    style={styles.activePactCard}
-                    activeOpacity={0.9}
+                    style={styles.pactCard}
+                    activeOpacity={0.7}
                   >
-                    <View style={styles.activePactGlow} />
-                    <View style={styles.activePactContent}>
-                      <View style={styles.activePactMain}>
-                        <Text style={styles.activePactTitle} numberOfLines={1}>
-                          {pact.challenge?.title || "Pact"}
-                        </Text>
-                        <Text style={styles.activePactCategory}>
+                    <View style={styles.pactInfo}>
+                      <Text style={styles.pactTitle} numberOfLines={1}>
+                        {pact.challenge?.title || "Pact"}
+                      </Text>
+                      <View style={styles.pactMeta}>
+                        <Text style={styles.pactCategory}>
                           {pact.challenge?.category ? getCategoryName(pact.challenge.category) : ""}
                         </Text>
+                        {pact.challenge?.endDate && (
+                          <Countdown endDate={pact.challenge.endDate} compact />
+                        )}
                       </View>
-                      <View style={styles.activePactRight}>
-                        <Text style={styles.activePactBet}>{pact.betAmount}€</Text>
-                        <View style={styles.proofButton}>
-                          <Ionicons name="camera" size={20} color={Colors.black} />
-                        </View>
+                    </View>
+                    <View style={styles.pactRight}>
+                      <Text style={styles.pactBet}>{pact.betAmount}€</Text>
+                      <View style={styles.pactProofBtn}>
+                        <Ionicons name="camera-outline" size={18} color={Colors.white} />
                       </View>
                     </View>
                   </TouchableOpacity>
@@ -366,7 +336,7 @@ export default function HomeScreen() {
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      {/* Join by Code Modal */}
+      {/* Join Modal */}
       <Modal
         visible={showJoinModal}
         animationType="slide"
@@ -378,25 +348,23 @@ export default function HomeScreen() {
           style={styles.modalOverlay}
         >
           <Pressable style={styles.modalBackdrop} onPress={handleCloseModal} />
-          <Animated.View
-            entering={SlideInDown.springify()}
-            style={styles.modalContainer}
-          >
+          <Animated.View entering={SlideInDown} style={styles.modalContent}>
             <View style={styles.modalHandle} />
+
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Rejoindre un ami</Text>
-              <TouchableOpacity onPress={handleCloseModal}>
-                <Ionicons name="close" size={24} color={Colors.textPrimary} />
+              <Text style={styles.modalTitle}>Code d'invitation</Text>
+              <TouchableOpacity onPress={handleCloseModal} style={styles.modalClose}>
+                <Ionicons name="close" size={24} color={Colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalSubtitle}>Entre le code à 6 chiffres</Text>
+            <Text style={styles.modalSub}>Entre le code à 6 chiffres de ton ami</Text>
 
-            <View style={styles.codeInputContainer}>
+            <View style={styles.codeBox}>
               <TextInput
                 style={styles.codeInput}
                 placeholder="000000"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={Colors.textLight}
                 value={inviteCode}
                 onChangeText={(text) => setInviteCode(text.replace(/[^0-9]/g, "").slice(0, 6))}
                 keyboardType="number-pad"
@@ -409,14 +377,14 @@ export default function HomeScreen() {
               onPress={handleJoinByCode}
               disabled={isSearching || inviteCode.length !== 6}
               style={[
-                styles.modalSubmitButton,
-                (isSearching || inviteCode.length !== 6) && styles.modalSubmitButtonDisabled,
+                styles.modalSubmit,
+                (isSearching || inviteCode.length !== 6) && styles.modalSubmitDisabled,
               ]}
             >
               {isSearching ? (
-                <ActivityIndicator color={Colors.black} />
+                <ActivityIndicator color={Colors.white} />
               ) : (
-                <Text style={styles.modalSubmitButtonText}>Rejoindre</Text>
+                <Text style={styles.modalSubmitText}>Rejoindre</Text>
               )}
             </TouchableOpacity>
           </Animated.View>
@@ -431,246 +399,244 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: Spacing.xxxl,
-  },
+
+  // Welcome
   welcomeContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: Spacing.xxxl,
-  },
-  logo: {
-    fontSize: 64,
-    fontWeight: "900",
-    color: Colors.textPrimary,
-    letterSpacing: 12,
+    paddingHorizontal: Spacing.xl,
+    backgroundColor: Colors.background,
   },
   logoImage: {
-    width: 280,
-    height: 280,
+    width: 200,
+    height: 200,
     marginBottom: Spacing.xxl,
   },
-  loadingDots: {
-    flexDirection: "row",
-    gap: Spacing.md,
-    marginTop: Spacing.xxl,
-  },
-  loadingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.success,
-  },
-  tagline: {
-    ...Typography.bodyLarge,
-    color: Colors.textSecondary,
-    marginTop: Spacing.lg,
-    marginBottom: Spacing.xxl,
-  },
-  authButton: {
+  ctaButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.md,
-    backgroundColor: Colors.textPrimary,
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.huge,
-    borderRadius: BorderRadius.full,
-    ...Shadows.lg,
+    backgroundColor: Colors.accent,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.lg,
+    gap: Spacing.sm,
+    ...Shadows.md,
   },
-  authButtonText: {
-    ...Typography.labelLarge,
-    color: Colors.black,
-    fontSize: 16,
+  ctaButtonText: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: Colors.white,
   },
+
+  // Loading
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  // Main
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
-    flexGrow: 1,
   },
+
+  // Header
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     marginBottom: Spacing.xl,
   },
-  greeting: {
+  greetingLabel: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: Colors.textTertiary,
+    marginBottom: 2,
+  },
+  greetingName: {
     fontSize: 28,
-    fontWeight: "700",
+    fontWeight: "600",
     color: Colors.textPrimary,
+    letterSpacing: -0.5,
   },
-  balanceChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.successMuted,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.full,
-    borderWidth: 2,
-    borderColor: Colors.success,
-    gap: Spacing.sm,
-    ...Shadows.md,
-  },
-  balanceText: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: Colors.success,
-  },
-  // Active Pacts Section
-  activePactsSection: {
-    marginBottom: Spacing.xxl,
-  },
-  sectionLabel: {
-    ...Typography.labelSmall,
-    color: Colors.accent,
-    letterSpacing: 1.5,
-    marginBottom: Spacing.md,
-  },
-  activePactsList: {
-    gap: Spacing.md,
-  },
-  activePactCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: "hidden",
+  balanceBox: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    alignItems: "flex-end",
     ...Shadows.sm,
   },
-  activePactGlow: {
-    display: "none",
-  },
-  activePactContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: Spacing.lg,
-  },
-  activePactMain: {
-    flex: 1,
-    gap: Spacing.xs,
-  },
-  activePactTitle: {
-    ...Typography.headlineSmall,
+  balanceAmount: {
+    fontSize: 22,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
-  activePactCategory: {
-    ...Typography.bodySmall,
+  balanceLabel: {
+    fontSize: 12,
+    fontWeight: "400",
     color: Colors.textTertiary,
   },
-  activePactRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  activePactBet: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: Colors.success,
-  },
-  proofButton: {
-    width: 48,
-    height: 48,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.accent,
-    justifyContent: "center",
-    alignItems: "center",
-    ...Shadows.sm,
-  },
-  // Main Actions
-  actionsContainer: {
-    gap: Spacing.lg,
+
+  // Actions
+  actionsSection: {
+    gap: Spacing.sm,
     marginBottom: Spacing.xl,
   },
-  mainButton: {
+  primaryAction: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.textPrimary,
-    borderRadius: BorderRadius.xxl,
-    padding: Spacing.xl,
-    gap: Spacing.lg,
-    ...Shadows.lg,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    gap: Spacing.md,
+    ...Shadows.sm,
   },
-  joinMainButton: {
-    backgroundColor: Colors.surfaceElevated,
-    borderWidth: 2,
-    borderColor: Colors.border,
-  },
-  mainButtonIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: BorderRadius.xl,
+  primaryActionIcon: {
+    width: 44,
+    height: 44,
     backgroundColor: Colors.accent,
+    borderRadius: BorderRadius.md,
     justifyContent: "center",
     alignItems: "center",
   },
-  joinMainButtonIcon: {
-    backgroundColor: Colors.surfaceHighlight,
-  },
-  mainButtonTextContainer: {
+  primaryActionText: {
     flex: 1,
-    gap: Spacing.xs,
   },
-  mainButtonText: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: Colors.black,
-  },
-  joinMainButtonText: {
+  primaryActionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
-  mainButtonSubtext: {
-    ...Typography.bodySmall,
+  primaryActionSub: {
+    fontSize: 13,
     color: Colors.textTertiary,
+    marginTop: 2,
   },
-  // Join Options
-  joinOptionsContainer: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: "hidden",
-  },
-  joinOptionButton: {
+  secondaryAction: {
     flexDirection: "row",
     alignItems: "center",
-    padding: Spacing.lg,
-    gap: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  joinOptionIcon: {
-    width: 48,
-    height: 48,
+    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.lg,
-    backgroundColor: Colors.infoMuted,
+    padding: Spacing.md,
+    gap: Spacing.md,
+    ...Shadows.xs,
+  },
+  secondaryActionIcon: {
+    width: 44,
+    height: 44,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.md,
     justifyContent: "center",
     alignItems: "center",
   },
-  joinOptionIconFriends: {
-    backgroundColor: Colors.accentMuted,
-  },
-  joinOptionTextContainer: {
+  secondaryActionText: {
     flex: 1,
-    gap: Spacing.xs,
+  },
+  secondaryActionTitle: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: Colors.textPrimary,
+  },
+  secondaryActionSub: {
+    fontSize: 13,
+    color: Colors.textTertiary,
+    marginTop: 2,
+  },
+
+  // Join Options
+  joinOptions: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    overflow: "hidden",
+    ...Shadows.xs,
+  },
+  joinOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: Spacing.md,
+    gap: Spacing.md,
   },
   joinOptionText: {
-    ...Typography.labelLarge,
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "400",
     color: Colors.textPrimary,
   },
-  joinOptionSubtext: {
-    ...Typography.bodySmall,
+  joinOptionDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginLeft: Spacing.xxl,
+  },
+
+  // Pacts Section
+  pactsSection: {
+    marginBottom: Spacing.xl,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+    marginBottom: Spacing.md,
+  },
+  pactsList: {
+    gap: Spacing.sm,
+  },
+  pactCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    ...Shadows.xs,
+  },
+  pactInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  pactTitle: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: Colors.textPrimary,
+  },
+  pactMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  pactCategory: {
+    fontSize: 13,
     color: Colors.textTertiary,
   },
+  pactRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  pactBet: {
+    fontSize: 17,
+    fontWeight: "600",
+    color: Colors.success,
+  },
+  pactProofBtn: {
+    width: 36,
+    height: 36,
+    backgroundColor: Colors.accent,
+    borderRadius: BorderRadius.sm,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
   bottomSpacer: {
     height: 120,
   },
-  // Modal styles
+
+  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: Colors.overlay,
@@ -679,19 +645,19 @@ const styles = StyleSheet.create({
   modalBackdrop: {
     flex: 1,
   },
-  modalContainer: {
+  modalContent: {
     backgroundColor: Colors.surface,
-    borderTopLeftRadius: BorderRadius.xxl,
-    borderTopRightRadius: BorderRadius.xxl,
-    paddingHorizontal: Spacing.xl,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
-    paddingBottom: Spacing.huge,
+    paddingBottom: Spacing.xxl,
   },
   modalHandle: {
-    width: 40,
+    width: 36,
     height: 4,
     backgroundColor: Colors.border,
-    borderRadius: 2,
+    borderRadius: BorderRadius.full,
     alignSelf: "center",
     marginBottom: Spacing.lg,
   },
@@ -699,43 +665,49 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.sm,
   },
   modalTitle: {
-    ...Typography.headlineMedium,
+    fontSize: 20,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
-  modalSubtitle: {
-    ...Typography.bodyMedium,
-    color: Colors.textTertiary,
-    marginBottom: Spacing.xl,
-  },
-  codeInputContainer: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.xl,
-    marginBottom: Spacing.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  codeInput: {
-    fontSize: 36,
-    fontWeight: "700",
-    color: Colors.textPrimary,
-    textAlign: "center",
-    letterSpacing: 12,
-  },
-  modalSubmitButton: {
-    backgroundColor: Colors.textPrimary,
-    paddingVertical: Spacing.lg,
-    borderRadius: BorderRadius.lg,
+  modalClose: {
+    width: 40,
+    height: 40,
+    justifyContent: "center",
     alignItems: "center",
   },
-  modalSubmitButtonDisabled: {
+  modalSub: {
+    fontSize: 15,
+    color: Colors.textTertiary,
+    marginBottom: Spacing.lg,
+  },
+  codeBox: {
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+  },
+  codeInput: {
+    fontSize: 28,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+    textAlign: "center",
+    letterSpacing: 6,
+  },
+  modalSubmit: {
+    backgroundColor: Colors.accent,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+  },
+  modalSubmitDisabled: {
     opacity: 0.5,
   },
-  modalSubmitButtonText: {
-    ...Typography.labelLarge,
-    color: Colors.black,
+  modalSubmitText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.white,
   },
 });

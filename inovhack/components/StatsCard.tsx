@@ -1,10 +1,13 @@
-import React from "react";
-import { View, Text, StyleSheet, Dimensions } from "react-native";
-import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
-import { Ionicons } from "@expo/vector-icons";
-import { Colors, Spacing, BorderRadius, Typography, Shadows } from "../constants/theme";
+/**
+ * StatsCard - Clean & Minimal
+ * Inspired by Luma's elegant simplicity
+ */
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+import React from "react";
+import { View, Text, StyleSheet } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
+import { Ionicons } from "@expo/vector-icons";
+import { Colors, Spacing, BorderRadius, Shadows } from "../constants/theme";
 
 interface StatsCardProps {
   totalWon: number;
@@ -30,63 +33,55 @@ const StatsCard: React.FC<StatsCardProps> = ({
   const xpProgress = (xp / xpToNextLevel) * 100;
 
   return (
-    <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.container}>
-      {/* Level & XP Bar */}
+    <Animated.View entering={FadeInDown.delay(50).duration(400)} style={styles.container}>
+      {/* Level & XP */}
       <View style={styles.levelSection}>
         <View style={styles.levelBadge}>
           <Text style={styles.levelNumber}>{level}</Text>
+          <Text style={styles.levelLabel}>Niveau</Text>
         </View>
-        <View style={styles.xpContainer}>
+        <View style={styles.xpSection}>
           <View style={styles.xpHeader}>
-            <Text style={styles.levelTitle}>
-              {userName || (level < 5 ? "Rookie" : level < 10 ? "Challenger" : level < 20 ? "Champion" : "Legend")}
-            </Text>
+            <Text style={styles.xpLabel}>Progression</Text>
             <Text style={styles.xpText}>{xp}/{xpToNextLevel} XP</Text>
           </View>
-          <View style={styles.xpBarBackground}>
-            <Animated.View
-              entering={FadeInUp.delay(300)}
-              style={[styles.xpBarFill, { width: `${xpProgress}%` }]}
-            />
+          <View style={styles.xpBarBg}>
+            <Animated.View style={[styles.xpBarFill, { width: `${xpProgress}%` }]} />
           </View>
         </View>
       </View>
 
       {/* Stats Grid */}
       <View style={styles.statsGrid}>
-        {/* Streak */}
         <View style={styles.statItem}>
-          <View style={styles.statIconContainer}>
-            <Ionicons name="flame" size={24} color="#FF6B6B" />
+          <View style={[styles.statIcon, { backgroundColor: Colors.warningMuted }]}>
+            <Ionicons name="flame-outline" size={18} color={Colors.warning} />
           </View>
           <Text style={styles.statValue}>{streak}</Text>
-          <Text style={styles.statLabel}>Streak</Text>
+          <Text style={styles.statLabel}>Série</Text>
         </View>
 
-        {/* Completed */}
         <View style={styles.statItem}>
-          <View style={[styles.statIconContainer, { backgroundColor: Colors.successMuted }]}>
-            <Ionicons name="checkmark-circle" size={24} color={Colors.success} />
+          <View style={[styles.statIcon, { backgroundColor: Colors.successMuted }]}>
+            <Ionicons name="checkmark-outline" size={18} color={Colors.success} />
           </View>
           <Text style={styles.statValue}>{completedChallenges}</Text>
-          <Text style={styles.statLabel}>Complétés</Text>
+          <Text style={styles.statLabel}>Pacts</Text>
         </View>
 
-        {/* Won */}
         <View style={styles.statItem}>
-          <View style={[styles.statIconContainer, { backgroundColor: "#E8F5E9" }]}>
-            <Ionicons name="trending-up" size={24} color="#4CAF50" />
+          <View style={[styles.statIcon, { backgroundColor: Colors.successMuted }]}>
+            <Ionicons name="trending-up-outline" size={18} color={Colors.success} />
           </View>
-          <Text style={[styles.statValue, { color: "#4CAF50" }]}>+{totalWon}€</Text>
+          <Text style={[styles.statValue, { color: Colors.success }]}>+{totalWon}€</Text>
           <Text style={styles.statLabel}>Gagnés</Text>
         </View>
 
-        {/* Lost */}
         <View style={styles.statItem}>
-          <View style={[styles.statIconContainer, { backgroundColor: "#FFEBEE" }]}>
-            <Ionicons name="trending-down" size={24} color="#F44336" />
+          <View style={[styles.statIcon, { backgroundColor: Colors.dangerMuted }]}>
+            <Ionicons name="trending-down-outline" size={18} color={Colors.danger} />
           </View>
-          <Text style={[styles.statValue, { color: "#F44336" }]}>-{totalLost}€</Text>
+          <Text style={[styles.statValue, { color: Colors.danger }]}>-{totalLost}€</Text>
           <Text style={styles.statLabel}>Perdus</Text>
         </View>
       </View>
@@ -96,17 +91,18 @@ const StatsCard: React.FC<StatsCardProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xxl,
-    padding: Spacing.xl,
-    marginHorizontal: Spacing.xl,
-    marginBottom: Spacing.xl,
-    ...Shadows.md,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
+    ...Shadows.sm,
   },
+
+  // Level Section
   levelSection: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: Spacing.xl,
+    marginBottom: Spacing.lg,
     paddingBottom: Spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
@@ -114,20 +110,25 @@ const styles = StyleSheet.create({
   levelBadge: {
     width: 56,
     height: 56,
-    borderRadius: 28,
     backgroundColor: Colors.accent,
+    borderRadius: BorderRadius.md,
     justifyContent: "center",
     alignItems: "center",
-    ...Shadows.md,
   },
   levelNumber: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: Colors.black,
+    fontSize: 22,
+    fontWeight: "700",
+    color: Colors.white,
   },
-  xpContainer: {
+  levelLabel: {
+    fontSize: 10,
+    fontWeight: "500",
+    color: Colors.white,
+    opacity: 0.8,
+  },
+  xpSection: {
     flex: 1,
-    marginLeft: Spacing.lg,
+    marginLeft: Spacing.md,
   },
   xpHeader: {
     flexDirection: "row",
@@ -135,25 +136,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: Spacing.sm,
   },
-  levelTitle: {
-    ...Typography.labelLarge,
+  xpLabel: {
+    fontSize: 14,
+    fontWeight: "500",
     color: Colors.textPrimary,
   },
   xpText: {
-    ...Typography.labelSmall,
+    fontSize: 13,
+    fontWeight: "400",
     color: Colors.textTertiary,
   },
-  xpBarBackground: {
-    height: 8,
+  xpBarBg: {
+    height: 6,
     backgroundColor: Colors.surfaceHighlight,
-    borderRadius: 4,
+    borderRadius: BorderRadius.full,
     overflow: "hidden",
   },
   xpBarFill: {
     height: "100%",
     backgroundColor: Colors.accent,
-    borderRadius: 4,
+    borderRadius: BorderRadius.full,
   },
+
+  // Stats Grid
   statsGrid: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -162,25 +167,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
   },
-  statIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#FFF3E0",
+  statIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: BorderRadius.sm,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   statValue: {
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: 16,
+    fontWeight: "600",
     color: Colors.textPrimary,
     marginBottom: 2,
   },
   statLabel: {
-    ...Typography.labelSmall,
+    fontSize: 12,
+    fontWeight: "400",
     color: Colors.textTertiary,
-    fontSize: 10,
   },
 });
 

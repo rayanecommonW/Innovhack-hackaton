@@ -1,3 +1,8 @@
+/**
+ * Category Picker Modal - Clean & Minimal
+ * Inspired by Luma's elegant simplicity
+ */
+
 import React, { useState, useMemo } from "react";
 import {
   View,
@@ -7,14 +12,16 @@ import {
   TextInput,
   FlatList,
   StyleSheet,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import Animated, { FadeIn, SlideInDown } from "react-native-reanimated";
 import { CATEGORIES } from "../constants/categories";
 import {
   Colors,
   Spacing,
   BorderRadius,
-  Typography,
+  Shadows,
 } from "../constants/theme";
 
 interface CategoryPickerModalProps {
@@ -51,27 +58,34 @@ export default function CategoryPickerModal({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType="fade"
       transparent
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <View style={styles.container}>
+        <Pressable style={styles.backdrop} onPress={onClose} />
+        <Animated.View
+          entering={SlideInDown.duration(300)}
+          style={styles.container}
+        >
+          {/* Handle */}
+          <View style={styles.handle} />
+
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Catégorie</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={Colors.textPrimary} />
+            <Text style={styles.title}>Choisir une catégorie</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={20} color={Colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
           {/* Search */}
           <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color={Colors.textTertiary} />
+            <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Rechercher..."
-              placeholderTextColor={Colors.textTertiary}
+              placeholder="Rechercher une catégorie..."
+              placeholderTextColor={Colors.textMuted}
               value={search}
               onChangeText={setSearch}
               autoCapitalize="none"
@@ -79,43 +93,61 @@ export default function CategoryPickerModal({
             />
             {search.length > 0 && (
               <TouchableOpacity onPress={() => setSearch("")}>
-                <Ionicons name="close-circle" size={20} color={Colors.textTertiary} />
+                <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
               </TouchableOpacity>
             )}
+          </View>
+
+          {/* Count */}
+          <View style={styles.countRow}>
+            <Text style={styles.countText}>
+              {filteredCategories.length} catégorie{filteredCategories.length > 1 ? "s" : ""}
+            </Text>
           </View>
 
           {/* Categories List */}
           <FlatList
             data={filteredCategories}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                onPress={() => handleSelect(item.id)}
-                style={[
-                  styles.categoryItem,
-                  selectedCategory === item.id && styles.categoryItemSelected,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.categoryText,
-                    selectedCategory === item.id && styles.categoryTextSelected,
-                  ]}
-                >
-                  {item.name}
-                </Text>
-                {selectedCategory === item.id && (
-                  <Ionicons name="checkmark" size={20} color={Colors.black} />
-                )}
-              </TouchableOpacity>
-            )}
+            renderItem={({ item, index }) => {
+              const isSelected = selectedCategory === item.id;
+              return (
+                <Animated.View entering={FadeIn.delay(index * 20).duration(200)}>
+                  <TouchableOpacity
+                    onPress={() => handleSelect(item.id)}
+                    style={[
+                      styles.categoryItem,
+                      isSelected && styles.categoryItemSelected,
+                    ]}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryText,
+                        isSelected && styles.categoryTextSelected,
+                      ]}
+                    >
+                      {item.name}
+                    </Text>
+                    {isSelected && (
+                      <View style={styles.checkIcon}>
+                        <Ionicons name="checkmark" size={16} color={Colors.white} />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </Animated.View>
+              );
+            }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
-              <Text style={styles.emptyText}>Aucune catégorie trouvée</Text>
+              <View style={styles.emptyState}>
+                <Ionicons name="search-outline" size={32} color={Colors.textMuted} />
+                <Text style={styles.emptyText}>Aucune catégorie trouvée</Text>
+              </View>
             }
           />
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -124,77 +156,115 @@ export default function CategoryPickerModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: Colors.overlay,
     justifyContent: "flex-end",
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   container: {
     backgroundColor: Colors.surface,
-    borderTopLeftRadius: BorderRadius.xxl,
-    borderTopRightRadius: BorderRadius.xxl,
-    paddingTop: Spacing.xl,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingTop: Spacing.md,
     maxHeight: "80%",
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    backgroundColor: Colors.border,
+    borderRadius: BorderRadius.full,
+    alignSelf: "center",
+    marginBottom: Spacing.lg,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.lg,
   },
   title: {
-    ...Typography.headlineMedium,
+    fontSize: 18,
+    fontWeight: "600",
     color: Colors.textPrimary,
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.full,
+    justifyContent: "center",
+    alignItems: "center",
   },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surfaceElevated,
-    marginHorizontal: Spacing.xl,
-    marginBottom: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceHighlight,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
     gap: Spacing.sm,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: Spacing.md,
-    ...Typography.bodyMedium,
+    paddingVertical: Spacing.sm,
+    fontSize: 15,
+    fontWeight: "400",
     color: Colors.textPrimary,
   },
+  countRow: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+  },
+  countText: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: Colors.textTertiary,
+  },
   listContent: {
-    paddingHorizontal: Spacing.xl,
-    paddingBottom: Spacing.huge,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xl,
   },
   categoryItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
-    marginBottom: Spacing.sm,
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.xs,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.md,
   },
   categoryItemSelected: {
-    backgroundColor: Colors.textPrimary,
-    borderColor: Colors.textPrimary,
+    backgroundColor: Colors.accent,
   },
   categoryText: {
-    ...Typography.bodyMedium,
+    fontSize: 15,
+    fontWeight: "400",
     color: Colors.textPrimary,
   },
   categoryTextSelected: {
-    color: Colors.black,
-    fontWeight: "600",
+    color: Colors.white,
+    fontWeight: "500",
+  },
+  checkIcon: {
+    width: 24,
+    height: 24,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: BorderRadius.full,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: Spacing.xl,
+    gap: Spacing.md,
   },
   emptyText: {
-    ...Typography.bodyMedium,
+    fontSize: 14,
+    fontWeight: "400",
     color: Colors.textTertiary,
-    textAlign: "center",
-    marginTop: Spacing.xxl,
   },
 });

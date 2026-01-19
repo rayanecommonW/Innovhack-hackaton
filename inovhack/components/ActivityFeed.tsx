@@ -1,8 +1,13 @@
+/**
+ * ActivityFeed - Clean & Minimal
+ * Inspired by Luma's elegant simplicity
+ */
+
 import React from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import Animated, { FadeInLeft } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors, Spacing, BorderRadius, Typography } from "../constants/theme";
+import { Colors, Spacing, BorderRadius, Shadows } from "../constants/theme";
 
 interface ActivityItem {
   id: string;
@@ -20,43 +25,20 @@ interface ActivityFeedProps {
 const getActionConfig = (action: ActivityItem["action"]) => {
   switch (action) {
     case "completed":
-      return {
-        icon: "checkmark-circle",
-        color: Colors.success,
-        text: "a validé",
-        emoji: "✅",
-      };
+      return { icon: "checkmark" as const, color: Colors.success, text: "Validé" };
     case "joined":
-      return {
-        icon: "enter",
-        color: Colors.info,
-        text: "a rejoint",
-        emoji: "🎯",
-      };
+      return { icon: "arrow-forward" as const, color: Colors.info, text: "Rejoint" };
     case "failed":
-      return {
-        icon: "close-circle",
-        color: Colors.danger,
-        text: "a raté",
-        emoji: "😢",
-      };
+      return { icon: "close" as const, color: Colors.danger, text: "Raté" };
     case "won":
-      return {
-        icon: "trophy",
-        color: Colors.accent,
-        text: "a gagné",
-        emoji: "🏆",
-      };
+      return { icon: "trophy" as const, color: Colors.success, text: "Gagné" };
   }
 };
 
 const ActivityFeed: React.FC<ActivityFeedProps> = ({ activities }) => {
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Ionicons name="pulse" size={18} color={Colors.info} />
-        <Text style={styles.title}>Activité récente</Text>
-      </View>
+      <Text style={styles.title}>Activité récente</Text>
 
       <ScrollView
         horizontal
@@ -68,22 +50,23 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({ activities }) => {
           return (
             <Animated.View
               key={activity.id}
-              entering={FadeInLeft.delay(index * 80).springify()}
-              style={styles.activityCard}
+              entering={FadeInLeft.delay(index * 60).duration(300)}
+              style={styles.card}
             >
-              <Text style={styles.emoji}>{config.emoji}</Text>
-              <Text style={styles.activityText}>
-                <Text style={styles.userName}>{activity.userName}</Text>
-                {" "}{config.text}{" "}
-                <Text style={styles.challengeName}>{activity.challengeTitle}</Text>
+              <View style={[styles.statusDot, { backgroundColor: config.color }]} />
+
+              <Text style={styles.userName}>{activity.userName}</Text>
+              <Text style={styles.actionText}>{config.text}</Text>
+              <Text style={styles.challengeName} numberOfLines={2}>
+                {activity.challengeTitle}
               </Text>
+
               {activity.amount && (
-                <View style={[styles.amountBadge, { backgroundColor: config.color + "20" }]}>
-                  <Text style={[styles.amountText, { color: config.color }]}>
-                    {activity.action === "won" ? "+" : "-"}{activity.amount}€
-                  </Text>
-                </View>
+                <Text style={[styles.amountText, { color: config.color }]}>
+                  {activity.action === "won" ? "+" : "-"}{activity.amount}€
+                </Text>
               )}
+
               <Text style={styles.timeAgo}>{activity.timeAgo}</Text>
             </Animated.View>
           );
@@ -97,61 +80,55 @@ const styles = StyleSheet.create({
   container: {
     marginBottom: Spacing.xl,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.xl,
+  title: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: Colors.textPrimary,
     marginBottom: Spacing.md,
   },
-  title: {
-    ...Typography.labelMedium,
-    color: Colors.textTertiary,
-  },
   scrollContent: {
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
-  activityCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    width: 200,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  card: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    width: 140,
+    ...Shadows.xs,
   },
-  emoji: {
-    fontSize: 24,
-    marginBottom: Spacing.sm,
-  },
-  activityText: {
-    ...Typography.bodySmall,
-    color: Colors.textSecondary,
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: BorderRadius.full,
     marginBottom: Spacing.sm,
   },
   userName: {
-    fontWeight: "700",
-    color: Colors.textPrimary,
-  },
-  challengeName: {
+    fontSize: 14,
     fontWeight: "600",
     color: Colors.textPrimary,
+    marginBottom: 2,
   },
-  amountBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
+  actionText: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: Colors.textTertiary,
+    marginBottom: Spacing.xs,
+  },
+  challengeName: {
+    fontSize: 13,
+    color: Colors.textSecondary,
     marginBottom: Spacing.sm,
+    lineHeight: 18,
   },
   amountText: {
-    ...Typography.labelSmall,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: Spacing.sm,
   },
   timeAgo: {
-    ...Typography.labelSmall,
-    color: Colors.textTertiary,
-    fontSize: 10,
+    fontSize: 11,
+    fontWeight: "400",
+    color: Colors.textMuted,
   },
 });
 

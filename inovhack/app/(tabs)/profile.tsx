@@ -1,3 +1,8 @@
+/**
+ * Profile Screen - Clean & Minimal
+ * Inspired by Luma's elegant simplicity with Instagram-style profile
+ */
+
 import React, { useState } from "react";
 import {
   View,
@@ -5,8 +10,8 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   StyleSheet,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,32 +19,34 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useAuth } from "../../providers/AuthProvider";
 import { router } from "expo-router";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import AddFundsModal from "../../components/AddFundsModal";
 import FriendsModal from "../../components/FriendsModal";
-import Leaderboard from "../../components/Leaderboard";
 import { getCategoryName } from "../../constants/categories";
 import {
   Colors,
   Spacing,
   BorderRadius,
-  Typography,
+  Shadows,
 } from "../../constants/theme";
 
-// Mock leaderboard data
-const MOCK_LEADERBOARD = [
-  { id: "1", name: "Marie", points: 1250, streak: 15 },
-  { id: "2", name: "Lucas", points: 980, streak: 12 },
-  { id: "3", name: "Emma", points: 875, streak: 8 },
-  { id: "4", name: "Thomas", points: 720, streak: 6, isCurrentUser: true },
-  { id: "5", name: "Julie", points: 650, streak: 5 },
-  { id: "6", name: "Antoine", points: 520, streak: 4 },
-];
+const BADGE_RARITY_COLORS: Record<string, string> = {
+  common: Colors.textMuted,
+  rare: Colors.info,
+  epic: "#9B59B6",
+  legendary: Colors.warning,
+};
 
 export default function ProfileScreen() {
-  const { user, userId, logout, isLoading, refreshUser } = useAuth();
+  const { user, userId, isLoading, refreshUser } = useAuth();
   const [showAddFunds, setShowAddFunds] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
+
+  // Get full profile with image and badges
+  const profile = useQuery(
+    api.users.getPublicProfile,
+    userId ? { userId } : "skip"
+  );
 
   const participations = useQuery(
     api.participations.getMyParticipations,
@@ -50,24 +57,6 @@ export default function ProfileScreen() {
     api.votes.getProofsToVote,
     userId ? { userId } : "skip"
   );
-
-  const handleLogout = () => {
-    Alert.alert(
-      "Déconnexion",
-      "Te déconnecter ?",
-      [
-        { text: "Annuler", style: "cancel" },
-        {
-          text: "Oui",
-          style: "destructive",
-          onPress: async () => {
-            await logout();
-            router.replace("/");
-          },
-        },
-      ]
-    );
-  };
 
   const handleSubmitProof = (participationId: string) => {
     router.push({ pathname: "/submit-proof", params: { participationId } });
@@ -87,8 +76,11 @@ export default function ProfileScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          <Ionicons name="person-outline" size={48} color={Colors.textTertiary} />
-          <Text style={styles.loginTitle}>Connecte-toi</Text>
+          <View style={styles.loginIconBox}>
+            <Ionicons name="person-outline" size={32} color={Colors.textTertiary} />
+          </View>
+          <Text style={styles.loginTitle}>Connexion requise</Text>
+          <Text style={styles.loginSubtitle}>Connecte-toi pour accéder à ton profil</Text>
           <TouchableOpacity
             onPress={() => router.push("/auth")}
             style={styles.loginButton}
@@ -107,6 +99,9 @@ export default function ProfileScreen() {
   // Filter active participations (not yet won or lost)
   const activePacts = participations?.filter((p: any) => p.status === "active") || [];
 
+  // Get badges from profile
+  const badges = profile?.badges || [];
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
@@ -115,161 +110,339 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.header}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {user.name.charAt(0).toUpperCase()}
-            </Text>
-          </View>
-          <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userEmail}>{user.email}</Text>
-        </Animated.View>
-
-        {/* Balance */}
-        <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>Solde</Text>
-          <Text style={styles.balanceAmount}>{user.balance.toFixed(2)}€</Text>
+        <Animated.View entering={FadeInDown.delay(50).duration(400)} style={styles.header}>
+          <Text style={styles.headerTitle}>Profil</Text>
           <TouchableOpacity
-            onPress={() => setShowAddFunds(true)}
-            style={styles.addFundsButton}
+            onPress={() => router.push("/settings")}
+            style={styles.settingsButton}
           >
-            <Ionicons name="add" size={20} color={Colors.black} />
-            <Text style={styles.addFundsText}>Ajouter</Text>
+            <Ionicons name="settings-outline" size={22} color={Colors.textSecondary} />
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Stats */}
-        <Animated.View entering={FadeInDown.delay(150).springify()} style={styles.statsRow}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{wonCount}</Text>
+        {/* Profile Section - Instagram Style */}
+        <Animated.View entering={FadeInDown.delay(80).duration(400)} style={styles.profileSection}>
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: "/user/[id]", params: { id: userId } })}
+            style={styles.avatarContainer}
+            activeOpacity={0.9}
+          >
+            {profile?.profileImageUrl ? (
+              <Image source={{ uri: profile.profileImageUrl }} style={styles.avatar} />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarText}>
+                  {user.name.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.profileInfo}>
+            <TouchableOpacity
+              onPress={() => router.push({ pathname: "/user/[id]", params: { id: userId } })}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.userName}>{user.name}</Text>
+            </TouchableOpacity>
+            {profile?.username && (
+              <Text style={styles.userUsername}>@{profile.username}</Text>
+            )}
+            {profile?.bio && (
+              <Text style={styles.userBio} numberOfLines={2}>{profile.bio}</Text>
+            )}
+          </View>
+        </Animated.View>
+
+        {/* Badges Row */}
+        {badges.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(100).duration(400)} style={styles.badgesSection}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.badgesScroll}
+            >
+              {badges.slice(0, 5).map((badge: any, index: number) => (
+                <TouchableOpacity
+                  key={badge._id}
+                  style={[
+                    styles.badgeItem,
+                    { borderColor: BADGE_RARITY_COLORS[badge.rarity] + "40" },
+                  ]}
+                  onPress={() => router.push("/badges")}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.badgeIcon}>{badge.icon}</Text>
+                  <Text style={styles.badgeTitle} numberOfLines={1}>{badge.title}</Text>
+                </TouchableOpacity>
+              ))}
+              {badges.length > 5 && (
+                <TouchableOpacity
+                  style={styles.moreBadges}
+                  onPress={() => router.push("/badges")}
+                >
+                  <Text style={styles.moreBadgesText}>+{badges.length - 5}</Text>
+                </TouchableOpacity>
+              )}
+            </ScrollView>
+          </Animated.View>
+        )}
+
+        {/* Balance Card */}
+        <Animated.View entering={FadeInDown.delay(120).duration(400)} style={styles.balanceCard}>
+          <View style={styles.balanceHeader}>
+            <Ionicons name="wallet-outline" size={18} color={Colors.accent} />
+            <Text style={styles.balanceLabelText}>Solde disponible</Text>
+          </View>
+          <View style={styles.balanceMain}>
+            <Text style={styles.balanceAmount}>{user.balance.toFixed(2)}€</Text>
+            <TouchableOpacity
+              onPress={() => setShowAddFunds(true)}
+              style={styles.addFundsButton}
+            >
+              <Ionicons name="add" size={18} color={Colors.white} />
+              <Text style={styles.addFundsText}>Ajouter</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+
+        {/* Stats Row */}
+        <Animated.View entering={FadeInDown.delay(150).duration(400)} style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <Text style={[styles.statValue, styles.statValueSuccess]}>{wonCount}</Text>
             <Text style={styles.statLabel}>Gagnés</Text>
           </View>
           <View style={styles.statDivider} />
-          <View style={styles.statItem}>
+          <View style={styles.statBox}>
             <Text style={styles.statValue}>{winRate}%</Text>
             <Text style={styles.statLabel}>Réussite</Text>
           </View>
           <View style={styles.statDivider} />
-          <View style={styles.statItem}>
+          <View style={styles.statBox}>
             <Text style={styles.statValue}>{totalBets}</Text>
             <Text style={styles.statLabel}>Total</Text>
           </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBox}>
+            <Text style={[styles.statValue, { color: Colors.warning }]}>
+              {profile?.currentStreak || 0}
+            </Text>
+            <Text style={styles.statLabel}>Série</Text>
+          </View>
         </Animated.View>
 
-        {/* Friends Card */}
-        <Animated.View entering={FadeInDown.delay(160).springify()}>
+        {/* Quick Actions */}
+        <Animated.View entering={FadeInDown.delay(180).duration(400)} style={styles.quickActionsGrid}>
           <TouchableOpacity
-            onPress={() => setShowFriends(true)}
-            style={styles.friendsCard}
+            onPress={() => router.push("/stats")}
+            style={styles.quickActionCard}
             activeOpacity={0.8}
           >
-            <View style={styles.friendsCardLeft}>
-              <View style={styles.friendsCardIcon}>
-                <Ionicons name="people" size={24} color={Colors.accent} />
-              </View>
-              <View>
-                <Text style={styles.friendsCardTitle}>Mes amis</Text>
-                <Text style={styles.friendsCardSubtitle}>
-                  Ajouter et gérer tes amis
-                </Text>
-              </View>
+            <View style={[styles.quickActionIcon, { backgroundColor: Colors.infoMuted }]}>
+              <Ionicons name="stats-chart" size={20} color={Colors.info} />
             </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
+            <Text style={styles.quickActionLabel}>Stats</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push("/leaderboard")}
+            style={styles.quickActionCard}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: Colors.warningMuted }]}>
+              <Ionicons name="trophy" size={20} color={Colors.warning} />
+            </View>
+            <Text style={styles.quickActionLabel}>Classement</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push("/badges")}
+            style={styles.quickActionCard}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: "rgba(155, 138, 224, 0.1)" }]}>
+              <Ionicons name="ribbon" size={20} color="#9B8AE0" />
+            </View>
+            <Text style={styles.quickActionLabel}>Badges</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push("/activity")}
+            style={styles.quickActionCard}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.quickActionIcon, { backgroundColor: Colors.successMuted }]}>
+              <Ionicons name="newspaper" size={20} color={Colors.success} />
+            </View>
+            <Text style={styles.quickActionLabel}>Activité</Text>
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Community Proofs to Vote - Always visible */}
-        <Animated.View entering={FadeInDown.delay(165).springify()}>
+        {/* Action Cards */}
+        <Animated.View entering={FadeInDown.delay(200).duration(400)}>
+          <TouchableOpacity
+            onPress={() => router.push("/notifications")}
+            style={styles.actionCard}
+            activeOpacity={0.9}
+          >
+            <View style={styles.actionCardLeft}>
+              <View style={[styles.actionCardIcon, { backgroundColor: Colors.dangerMuted }]}>
+                <Ionicons name="notifications-outline" size={22} color={Colors.danger} />
+              </View>
+              <View>
+                <Text style={styles.actionCardTitle}>Notifications</Text>
+                <Text style={styles.actionCardSubtitle}>Rappels et alertes</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(220).duration(400)}>
+          <TouchableOpacity
+            onPress={() => setShowFriends(true)}
+            style={styles.actionCard}
+            activeOpacity={0.9}
+          >
+            <View style={styles.actionCardLeft}>
+              <View style={styles.actionCardIcon}>
+                <Ionicons name="people-outline" size={22} color={Colors.accent} />
+              </View>
+              <View>
+                <Text style={styles.actionCardTitle}>Mes amis</Text>
+                <Text style={styles.actionCardSubtitle}>Ajouter et gérer tes amis</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(240).duration(400)}>
+          <TouchableOpacity
+            onPress={() => router.push("/transactions")}
+            style={styles.actionCard}
+            activeOpacity={0.9}
+          >
+            <View style={styles.actionCardLeft}>
+              <View style={[styles.actionCardIcon, { backgroundColor: Colors.successMuted }]}>
+                <Ionicons name="receipt-outline" size={22} color={Colors.success} />
+              </View>
+              <View>
+                <Text style={styles.actionCardTitle}>Transactions</Text>
+                <Text style={styles.actionCardSubtitle}>Historique des paiements</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
+        </Animated.View>
+
+        <Animated.View entering={FadeInDown.delay(260).duration(400)}>
+          <TouchableOpacity
+            onPress={() => router.push("/referrals")}
+            style={styles.actionCard}
+            activeOpacity={0.9}
+          >
+            <View style={styles.actionCardLeft}>
+              <View style={[styles.actionCardIcon, { backgroundColor: Colors.warningMuted }]}>
+                <Ionicons name="gift-outline" size={22} color={Colors.warning} />
+              </View>
+              <View>
+                <Text style={styles.actionCardTitle}>Parrainage</Text>
+                <Text style={styles.actionCardSubtitle}>Invite tes amis et gagne</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Community Proofs to Vote */}
+        <Animated.View entering={FadeInDown.delay(280).duration(400)}>
           <TouchableOpacity
             onPress={() => router.push("/community-proofs")}
             style={[
-              styles.communityProofsCard,
-              proofsToVote && proofsToVote.length > 0
-                ? styles.communityProofsCardActive
-                : styles.communityProofsCardEmpty
+              styles.actionCard,
+              proofsToVote && proofsToVote.length > 0 && styles.actionCardActive
             ]}
-            activeOpacity={0.8}
+            activeOpacity={0.9}
           >
-            <View style={styles.communityProofsLeft}>
+            <View style={styles.actionCardLeft}>
               <View style={[
-                styles.communityProofsIcon,
-                proofsToVote && proofsToVote.length > 0 && styles.communityProofsIconActive
+                styles.actionCardIcon,
+                proofsToVote && proofsToVote.length > 0 && styles.actionCardIconActive
               ]}>
                 <Ionicons
-                  name="people"
-                  size={24}
-                  color={proofsToVote && proofsToVote.length > 0 ? Colors.info : Colors.textTertiary}
+                  name="checkmark-circle-outline"
+                  size={22}
+                  color={proofsToVote && proofsToVote.length > 0 ? Colors.white : Colors.textTertiary}
                 />
               </View>
               <View>
-                <Text style={styles.communityProofsTitle}>Validation communautaire</Text>
+                <Text style={styles.actionCardTitle}>Validation communautaire</Text>
                 <Text style={[
-                  styles.communityProofsSubtitle,
-                  proofsToVote && proofsToVote.length > 0
-                    ? styles.communityProofsSubtitleActive
-                    : styles.communityProofsSubtitleEmpty
+                  styles.actionCardSubtitle,
+                  proofsToVote && proofsToVote.length > 0 && styles.actionCardSubtitleActive
                 ]}>
                   {proofsToVote && proofsToVote.length > 0
                     ? `${proofsToVote.length} preuve${proofsToVote.length > 1 ? "s" : ""} en attente`
-                    : "Aucune preuve a valider"
+                    : "Aucune preuve à valider"
                   }
                 </Text>
               </View>
             </View>
             {proofsToVote && proofsToVote.length > 0 ? (
-              <View style={styles.communityProofsBadge}>
-                <Text style={styles.communityProofsBadgeText}>{proofsToVote.length}</Text>
+              <View style={styles.proofsBadge}>
+                <Text style={styles.proofsBadgeText}>{proofsToVote.length}</Text>
               </View>
             ) : (
-              <Ionicons name="chevron-forward" size={20} color={Colors.textTertiary} />
+              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
             )}
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Active Pacts - This is the missing link! */}
+        {/* Active Pacts */}
         {activePacts.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(180).springify()} style={styles.activePactsSection}>
-            <Text style={styles.sectionTitle}>MES PACTS ACTIFS</Text>
+          <Animated.View entering={FadeInDown.delay(300).duration(400)} style={styles.activePactsSection}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="flash-outline" size={18} color={Colors.accent} />
+              <Text style={styles.sectionTitle}>Mes pacts actifs</Text>
+              <View style={styles.sectionBadge}>
+                <Text style={styles.sectionBadgeText}>{activePacts.length}</Text>
+              </View>
+            </View>
             <View style={styles.pactsList}>
-              {activePacts.map((pact: any) => (
-                <View key={pact._id} style={styles.pactCard}>
-                  <View style={styles.pactMain}>
-                    <Text style={styles.pactTitle} numberOfLines={1}>
-                      {pact.challenge?.title || "Pact"}
-                    </Text>
-                    <Text style={styles.pactCategory}>
-                      {pact.challenge?.category ? getCategoryName(pact.challenge.category) : ""}
-                    </Text>
+              {activePacts.map((pact: any, index: number) => (
+                <Animated.View
+                  key={pact._id}
+                  entering={FadeInRight.delay(320 + index * 40).duration(300)}
+                >
+                  <View style={styles.pactCard}>
+                    <View style={styles.pactMain}>
+                      <Text style={styles.pactTitle} numberOfLines={1}>
+                        {pact.challenge?.title || "Pact"}
+                      </Text>
+                      <View style={styles.pactMeta}>
+                        <View style={styles.pactCategoryBadge}>
+                          <Text style={styles.pactCategoryText}>
+                            {pact.challenge?.category ? getCategoryName(pact.challenge.category) : ""}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={styles.pactRight}>
+                      <Text style={styles.pactBet}>{pact.betAmount}€</Text>
+                      <TouchableOpacity
+                        onPress={() => handleSubmitProof(pact._id)}
+                        style={styles.submitProofButton}
+                      >
+                        <Ionicons name="camera-outline" size={18} color={Colors.white} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <View style={styles.pactRight}>
-                    <Text style={styles.pactBet}>{pact.betAmount}€</Text>
-                    <TouchableOpacity
-                      onPress={() => handleSubmitProof(pact._id)}
-                      style={styles.submitProofButton}
-                    >
-                      <Ionicons name="camera" size={18} color={Colors.black} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                </Animated.View>
               ))}
             </View>
           </Animated.View>
         )}
-
-        {/* Logout */}
-        {/* Leaderboard */}
-        <Leaderboard users={MOCK_LEADERBOARD} title="Classement Amis" />
-
-        <Animated.View entering={FadeInDown.delay(200).springify()}>
-          <TouchableOpacity
-            onPress={handleLogout}
-            style={styles.logoutButton}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
-            <Text style={styles.logoutText}>Déconnexion</Text>
-          </TouchableOpacity>
-        </Animated.View>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -303,219 +476,353 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     gap: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
+  },
+  loginIconBox: {
+    width: 72,
+    height: 72,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.full,
+    justifyContent: "center",
+    alignItems: "center",
   },
   loginTitle: {
-    ...Typography.headlineMedium,
+    fontSize: 20,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
+  loginSubtitle: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: Colors.textTertiary,
+    textAlign: "center",
+  },
   loginButton: {
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: Colors.accent,
     paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xxl,
+    paddingHorizontal: Spacing.xl,
     borderRadius: BorderRadius.full,
+    marginTop: Spacing.md,
   },
   loginButtonText: {
-    ...Typography.labelMedium,
-    color: Colors.black,
+    fontSize: 15,
+    fontWeight: "500",
+    color: Colors.white,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.xxl,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
   },
+
+  // Header
   header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: Spacing.xxl,
+    marginBottom: Spacing.lg,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+  },
+  settingsButton: {
+    width: 40,
+    height: 40,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.full,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  // Profile Section
+  profileSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  avatarContainer: {
+    position: "relative",
   },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: Colors.surfaceHighlight,
+  },
+  avatarPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.accent,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: Colors.accent,
-    marginBottom: Spacing.lg,
   },
   avatarText: {
     fontSize: 32,
-    fontWeight: "700",
-    color: Colors.textPrimary,
+    fontWeight: "600",
+    color: Colors.white,
+  },
+  profileInfo: {
+    flex: 1,
+    gap: 4,
   },
   userName: {
-    ...Typography.headlineLarge,
+    fontSize: 22,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
-  userEmail: {
-    ...Typography.bodySmall,
+  userUsername: {
+    fontSize: 14,
     color: Colors.textTertiary,
-    marginTop: Spacing.xs,
   },
-  balanceCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.xl,
-    alignItems: "center",
+  userBio: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+
+  // Badges Section
+  badgesSection: {
     marginBottom: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
-  balanceLabel: {
-    ...Typography.labelSmall,
+  badgesScroll: {
+    gap: Spacing.sm,
+  },
+  badgeItem: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    alignItems: "center",
+    borderWidth: 1,
+    minWidth: 70,
+    ...Shadows.xs,
+  },
+  badgeIcon: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  badgeTitle: {
+    fontSize: 10,
+    fontWeight: "500",
+    color: Colors.textSecondary,
+    textAlign: "center",
+  },
+  moreBadges: {
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  moreBadgesText: {
+    fontSize: 13,
+    fontWeight: "600",
     color: Colors.textTertiary,
-    marginBottom: Spacing.xs,
+  },
+
+  // Balance Card
+  balanceCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.md,
+    ...Shadows.sm,
+  },
+  balanceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  balanceLabelText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.textSecondary,
+  },
+  balanceMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   balanceAmount: {
-    fontSize: 36,
-    fontWeight: "700",
-    color: Colors.success,
-    marginBottom: Spacing.lg,
+    fontSize: 32,
+    fontWeight: "600",
+    color: Colors.textPrimary,
   },
   addFundsButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: Colors.accent,
     paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.full,
     gap: Spacing.xs,
   },
   addFundsText: {
-    ...Typography.labelMedium,
-    color: Colors.black,
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.white,
   },
+
+  // Stats Row
   statsRow: {
     flexDirection: "row",
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    marginBottom: Spacing.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.lg,
+    paddingVertical: Spacing.md,
+    ...Shadows.sm,
   },
-  statItem: {
+  statBox: {
     flex: 1,
     alignItems: "center",
+    gap: 4,
   },
   statValue: {
-    ...Typography.headlineMedium,
+    fontSize: 22,
+    fontWeight: "700",
     color: Colors.textPrimary,
+    fontVariant: ["tabular-nums"],
+  },
+  statValueSuccess: {
+    color: Colors.success,
   },
   statLabel: {
-    ...Typography.bodySmall,
+    fontSize: 11,
+    fontWeight: "400",
     color: Colors.textTertiary,
-    marginTop: Spacing.xs,
   },
   statDivider: {
     width: 1,
     backgroundColor: Colors.border,
+    marginVertical: Spacing.xs,
   },
-  // Friends Card
-  friendsCard: {
+
+  // Quick Actions Grid
+  quickActionsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
+  },
+  quickActionCard: {
+    width: "48%",
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    alignItems: "center",
+    ...Shadows.xs,
+  },
+  quickActionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.full,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+  },
+  quickActionLabel: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: Colors.textSecondary,
+  },
+
+  // Action Cards
+  actionCard: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    marginBottom: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    ...Shadows.sm,
   },
-  friendsCardLeft: {
+  actionCardActive: {
+    borderWidth: 1,
+    borderColor: Colors.accent,
+  },
+  actionCardLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.md,
+    flex: 1,
   },
-  friendsCardIcon: {
+  actionCardIcon: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.surfaceHighlight,
+    backgroundColor: Colors.accentMuted,
+    borderRadius: BorderRadius.full,
     justifyContent: "center",
     alignItems: "center",
   },
-  friendsCardTitle: {
-    ...Typography.labelLarge,
+  actionCardIconActive: {
+    backgroundColor: Colors.accent,
+  },
+  actionCardTitle: {
+    fontSize: 15,
+    fontWeight: "500",
     color: Colors.textPrimary,
   },
-  friendsCardSubtitle: {
-    ...Typography.bodySmall,
+  actionCardSubtitle: {
+    fontSize: 13,
+    fontWeight: "400",
     color: Colors.textTertiary,
-    marginTop: Spacing.xs,
+    marginTop: 2,
   },
-  // Community Proofs Card
-  communityProofsCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    marginBottom: Spacing.xl,
-    borderWidth: 1,
+  actionCardSubtitleActive: {
+    color: Colors.accent,
   },
-  communityProofsCardActive: {
-    backgroundColor: Colors.infoMuted,
-    borderColor: Colors.info,
-  },
-  communityProofsCardEmpty: {
-    backgroundColor: Colors.surfaceElevated,
-    borderColor: Colors.border,
-  },
-  communityProofsLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  communityProofsIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.surfaceHighlight,
+  proofsBadge: {
+    minWidth: 28,
+    height: 28,
+    backgroundColor: Colors.accent,
+    borderRadius: BorderRadius.full,
     justifyContent: "center",
     alignItems: "center",
+    paddingHorizontal: Spacing.sm,
   },
-  communityProofsIconActive: {
-    backgroundColor: Colors.surfaceElevated,
+  proofsBadgeText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.white,
   },
-  communityProofsTitle: {
-    ...Typography.labelLarge,
-    color: Colors.textPrimary,
-  },
-  communityProofsSubtitle: {
-    ...Typography.bodySmall,
-    marginTop: Spacing.xs,
-  },
-  communityProofsSubtitleActive: {
-    color: Colors.info,
-  },
-  communityProofsSubtitleEmpty: {
-    color: Colors.textTertiary,
-  },
-  communityProofsBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.info,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  communityProofsBadgeText: {
-    ...Typography.labelMedium,
-    color: Colors.textPrimary,
-  },
-  // Active Pacts Section
+
+  // Active Pacts
   activePactsSection: {
-    marginBottom: Spacing.xl,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.lg,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: Spacing.md,
   },
   sectionTitle: {
-    ...Typography.labelSmall,
-    color: Colors.textTertiary,
-    letterSpacing: 1,
-    marginBottom: Spacing.md,
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+  },
+  sectionBadge: {
+    backgroundColor: Colors.accentMuted,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    marginLeft: "auto",
+  },
+  sectionBadgeText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: Colors.accent,
   },
   pactsList: {
     gap: Spacing.sm,
@@ -523,23 +830,34 @@ const styles = StyleSheet.create({
   pactCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    padding: Spacing.md,
+    ...Shadows.sm,
   },
   pactMain: {
     flex: 1,
     gap: Spacing.xs,
   },
   pactTitle: {
-    ...Typography.labelLarge,
+    fontSize: 15,
+    fontWeight: "500",
     color: Colors.textPrimary,
   },
-  pactCategory: {
-    ...Typography.bodySmall,
-    color: Colors.textTertiary,
+  pactMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  pactCategoryBadge: {
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+  },
+  pactCategoryText: {
+    fontSize: 11,
+    fontWeight: "400",
+    color: Colors.textSecondary,
   },
   pactRight: {
     flexDirection: "row",
@@ -547,28 +865,19 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   pactBet: {
-    ...Typography.labelLarge,
-    color: Colors.success,
+    fontSize: 18,
+    fontWeight: "600",
+    color: Colors.accent,
   },
   submitProofButton: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.md,
     backgroundColor: Colors.accent,
+    borderRadius: BorderRadius.full,
     justifyContent: "center",
     alignItems: "center",
   },
-  logoutButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.sm,
-    paddingVertical: Spacing.lg,
-  },
-  logoutText: {
-    ...Typography.labelMedium,
-    color: Colors.danger,
-  },
+
   bottomSpacer: {
     height: 120,
   },
