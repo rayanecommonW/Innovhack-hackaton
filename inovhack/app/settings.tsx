@@ -16,10 +16,12 @@ import {
   Switch,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { useAuth } from "../providers/AuthProvider";
 import { router } from "expo-router";
@@ -40,7 +42,7 @@ const THEME_OPTIONS: { key: ThemeMode; label: string; icon: string }[] = [
 ];
 
 export default function SettingsScreen() {
-  const { userId, logout } = useAuth();
+  const { userId, signOut } = useAuth();
   const { mode, setTheme, isDark } = useTheme();
 
   const user = useQuery(
@@ -50,6 +52,8 @@ export default function SettingsScreen() {
 
   const updateProfile = useMutation(api.users.updateProfile);
   const updateNotifications = useMutation(api.users.updateNotificationPreferences);
+  const deleteAccountAction = useAction(api.users.deleteAccount);
+  const withdrawFunds = useMutation(api.stripe.withdrawFunds);
 
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
@@ -58,6 +62,13 @@ export default function SettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [profileImageUrl, setProfileImageUrl] = useState<string | undefined>();
+  const [deleting, setDeleting] = useState(false);
+
+  // Withdrawal modal
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawIban, setWithdrawIban] = useState("");
+  const [withdrawing, setWithdrawing] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -123,10 +134,122 @@ export default function SettingsScreen() {
         {
           text: "Déconnexion",
           style: "destructive",
-          onPress: logout,
+          onPress: async () => {
+            await signOut();
+            router.replace("/auth");
+          },
         },
       ]
     );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Supprimer le compte",
+      "⚠️ ATTENTION\n\nCette action est DÉFINITIVE et irréversible.\n\nAvant de continuer, vérifiez que :\n• Vous n'avez plus d'argent sur votre compte\n• Vous n'avez pas de pacts actifs\n\nToutes vos données seront supprimées.",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Supprimer définitivement",
+          style: "destructive",
+          onPress: () => confirmDeleteAccount(),
+        },
+      ]
+    );
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (!userId) return;
+
+    setDeleting(true);
+    try {
+      await deleteAccountAction({ userId });
+      await signOut();
+      Alert.alert(
+        "Compte supprimé",
+        "Votre compte a été supprimé avec succès.",
+        [{ text: "OK", onPress: () => router.replace("/auth") }]
+      );
+    } catch (error: any) {
+      Alert.alert("Erreur", error.message || "Impossible de supprimer le compte");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!userId) return;
+
+    const amount = parseFloat(withdrawAmount);
+
+    // Validation côté client avec messages propres
+    if (isNaN(amount) || amount <= 0) {
+      Alert.alert("Erreur", "Veuillez entrer un montant valide");
+      return;
+    }
+
+    if (amount < 10) {
+      Alert.alert("Montant insuffisant", "Le montant minimum de retrait est de 10€");
+      return;
+    }
+
+    if (amount > (user?.balance || 0)) {
+      Alert.alert("Solde insuffisant", `Vous n'avez que ${(user?.balance || 0).toFixed(2)}€ disponible`);
+      return;
+    }
+
+    const cleanIban = withdrawIban.trim().replace(/\s/g, "").toUpperCase();
+    if (!cleanIban) {
+      Alert.alert("IBAN requis", "Veuillez entrer votre IBAN");
+      return;
+    }
+
+    // Validation IBAN basique côté client
+    const ibanRegex = /^[A-Z]{2}[0-9]{2}[A-Z0-9]{4}[0-9]{7}([A-Z0-9]?){0,16}$/;
+    if (!ibanRegex.test(cleanIban)) {
+      Alert.alert(
+        "IBAN invalide",
+        "Le format de votre IBAN n'est pas valide.\n\nExemple: FR76 3000 6000 0112 3456 7890 189"
+      );
+      return;
+    }
+
+    setWithdrawing(true);
+    try {
+      const result = await withdrawFunds({
+        userId,
+        amount,
+        iban: cleanIban,
+      });
+
+      Alert.alert(
+        "Retrait effectué",
+        `${amount}€ ont été envoyés vers votre compte bancaire.\n\nNouveau solde: ${result.newBalance.toFixed(2)}€`,
+        [{ text: "OK", onPress: () => {
+          setShowWithdrawModal(false);
+          setWithdrawAmount("");
+          setWithdrawIban("");
+        }}]
+      );
+    } catch (error: any) {
+      // Transformer les erreurs Convex en messages propres
+      const errorMessage = error.message || "Une erreur est survenue";
+      let userFriendlyMessage = errorMessage;
+
+      if (errorMessage.includes("IBAN invalide") || errorMessage.includes("Format IBAN")) {
+        userFriendlyMessage = "Le format de votre IBAN n'est pas valide.\n\nExemple: FR76 3000 6000 0112 3456 7890 189";
+      } else if (errorMessage.includes("Montant minimum")) {
+        userFriendlyMessage = "Le montant minimum de retrait est de 10€";
+      } else if (errorMessage.includes("Solde insuffisant")) {
+        userFriendlyMessage = `Solde insuffisant. Vous avez ${(user?.balance || 0).toFixed(2)}€ disponible`;
+      } else if (errorMessage.includes("Utilisateur non trouvé")) {
+        userFriendlyMessage = "Session expirée. Veuillez vous reconnecter.";
+      }
+
+      Alert.alert("Erreur", userFriendlyMessage);
+    } finally {
+      setWithdrawing(false);
+    }
   };
 
   if (!user) {
@@ -240,6 +363,32 @@ export default function SettingsScreen() {
             </View>
           </Animated.View>
 
+          {/* Balance & Withdrawal */}
+          <Animated.View entering={FadeInDown.delay(140).duration(400)} style={styles.section}>
+            <Text style={styles.sectionTitle}>Solde</Text>
+
+            <View style={styles.balanceCard}>
+              <View style={styles.balanceInfo}>
+                <Text style={styles.balanceLabel}>Disponible</Text>
+                <Text style={styles.balanceValue}>{(user?.balance || 0).toFixed(2)}€</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowWithdrawModal(true)}
+                style={[
+                  styles.withdrawButton,
+                  (user?.balance || 0) < 10 && styles.withdrawButtonDisabled,
+                ]}
+                disabled={(user?.balance || 0) < 10}
+              >
+                <Ionicons name="arrow-down-circle-outline" size={20} color={Colors.white} />
+                <Text style={styles.withdrawButtonText}>Retirer</Text>
+              </TouchableOpacity>
+            </View>
+            {(user?.balance || 0) < 10 && (
+              <Text style={styles.withdrawHint}>Minimum 10€ pour retirer</Text>
+            )}
+          </Animated.View>
+
           {/* Notifications */}
           <Animated.View entering={FadeInDown.delay(150).duration(400)} style={styles.section}>
             <Text style={styles.sectionTitle}>Notifications</Text>
@@ -342,6 +491,21 @@ export default function SettingsScreen() {
               <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
               <Text style={styles.logoutText}>Déconnexion</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.deleteAccountButton}
+              onPress={handleDeleteAccount}
+              disabled={deleting}
+            >
+              {deleting ? (
+                <ActivityIndicator size="small" color={Colors.danger} />
+              ) : (
+                <>
+                  <Ionicons name="trash-outline" size={20} color={Colors.danger} />
+                  <Text style={styles.deleteAccountText}>Supprimer le compte</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </Animated.View>
 
           {/* App Version */}
@@ -349,6 +513,81 @@ export default function SettingsScreen() {
 
           <View style={styles.bottomSpacer} />
         </ScrollView>
+
+        {/* Withdrawal Modal */}
+        <Modal
+          visible={showWithdrawModal}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setShowWithdrawModal(false)}
+        >
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setShowWithdrawModal(false)}
+          >
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              style={styles.modalKeyboard}
+            >
+              <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Retirer des fonds</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowWithdrawModal(false)}
+                    style={styles.modalClose}
+                  >
+                    <Ionicons name="close" size={24} color={Colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.modalBalance}>
+                  Solde disponible: {(user?.balance || 0).toFixed(2)}€
+                </Text>
+
+                <View style={styles.modalInputGroup}>
+                  <Text style={styles.modalInputLabel}>Montant (€)</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={withdrawAmount}
+                    onChangeText={setWithdrawAmount}
+                    placeholder="Minimum 10€"
+                    placeholderTextColor={Colors.textMuted}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+
+                <View style={styles.modalInputGroup}>
+                  <Text style={styles.modalInputLabel}>IBAN</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={withdrawIban}
+                    onChangeText={setWithdrawIban}
+                    placeholder="FR76 XXXX XXXX XXXX XXXX XXXX XXX"
+                    placeholderTextColor={Colors.textMuted}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.confirmWithdrawButton, withdrawing && styles.confirmWithdrawButtonDisabled]}
+                  onPress={handleWithdraw}
+                  disabled={withdrawing}
+                >
+                  {withdrawing ? (
+                    <ActivityIndicator color={Colors.white} />
+                  ) : (
+                    <Text style={styles.confirmWithdrawText}>Confirmer le retrait</Text>
+                  )}
+                </TouchableOpacity>
+
+                <Text style={styles.modalDisclaimer}>
+                  Le virement sera effectué sous 2-3 jours ouvrés.
+                </Text>
+              </Pressable>
+            </KeyboardAvoidingView>
+          </Pressable>
+        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -389,6 +628,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "600",
     color: Colors.textPrimary,
+    textAlign: "center",
+    flex: 1,
   },
   saveButton: {
     paddingHorizontal: Spacing.md,
@@ -400,7 +641,7 @@ const styles = StyleSheet.create({
     color: Colors.accent,
   },
   placeholder: {
-    width: 60,
+    width: 40,
   },
 
   // Photo
@@ -554,6 +795,24 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: Colors.danger,
   },
+  deleteAccountButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    backgroundColor: "transparent",
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginTop: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.danger,
+    opacity: 0.8,
+  },
+  deleteAccountText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.danger,
+  },
 
   // Version
   version: {
@@ -565,5 +824,130 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: 40,
+  },
+
+  // Balance Card
+  balanceCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    ...Shadows.xs,
+  },
+  balanceInfo: {
+    flex: 1,
+  },
+  balanceLabel: {
+    fontSize: 13,
+    color: Colors.textTertiary,
+    marginBottom: 2,
+  },
+  balanceValue: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: Colors.textPrimary,
+  },
+  withdrawButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: Colors.accent,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  withdrawButtonDisabled: {
+    backgroundColor: Colors.textMuted,
+    opacity: 0.5,
+  },
+  withdrawButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.white,
+  },
+  withdrawHint: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: Spacing.xs,
+    textAlign: "center",
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalKeyboard: {
+    width: "100%",
+  },
+  modalContent: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.lg,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+  },
+  modalClose: {
+    padding: Spacing.xs,
+  },
+  modalBalance: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.lg,
+    textAlign: "center",
+    fontWeight: "500",
+  },
+  modalInputGroup: {
+    marginBottom: Spacing.md,
+  },
+  modalInputLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
+  },
+  modalInput: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    fontSize: 16,
+    color: Colors.textPrimary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  confirmWithdrawButton: {
+    backgroundColor: Colors.accent,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    alignItems: "center",
+    marginTop: Spacing.md,
+  },
+  confirmWithdrawButtonDisabled: {
+    opacity: 0.6,
+  },
+  confirmWithdrawText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.white,
+  },
+  modalDisclaimer: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    textAlign: "center",
+    marginTop: Spacing.md,
   },
 });

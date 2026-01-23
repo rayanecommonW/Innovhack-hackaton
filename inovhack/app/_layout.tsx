@@ -8,10 +8,12 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 import 'react-native-reanimated';
+import { ClerkProvider } from '../providers/ClerkProvider';
 import { ConvexProvider } from '../providers/ConvexProvider';
 import { AuthProvider, useAuth } from '../providers/AuthProvider';
 import { NotificationProvider } from '../providers/NotificationProvider';
 import { ThemeContextProvider, useTheme } from '../providers/ThemeProvider';
+import { StripeProvider } from '../providers/StripeProvider';
 import { Colors } from '../constants/theme';
 
 // Light theme
@@ -198,6 +200,13 @@ function InnerLayout() {
               animationDuration: 200,
             }}
           />
+          <Stack.Screen
+            name="admin"
+            options={{
+              animation: 'slide_from_right',
+              animationDuration: 200,
+            }}
+          />
         </Stack>
       </NavigationHandler>
       <StatusBar style={isDark ? "light" : "dark"} />
@@ -209,14 +218,18 @@ export default function RootLayout() {
   const systemColorScheme = useColorScheme();
 
   return (
-    <ConvexProvider>
-      <AuthProvider>
-        <NotificationProvider>
-          <ThemeContextProvider>
-            <InnerLayout />
-          </ThemeContextProvider>
-        </NotificationProvider>
-      </AuthProvider>
-    </ConvexProvider>
+    <ClerkProvider>
+      <ConvexProvider>
+        <StripeProvider>
+          <AuthProvider>
+            <NotificationProvider>
+              <ThemeContextProvider>
+                <InnerLayout />
+              </ThemeContextProvider>
+            </NotificationProvider>
+          </AuthProvider>
+        </StripeProvider>
+      </ConvexProvider>
+    </ClerkProvider>
   );
 }

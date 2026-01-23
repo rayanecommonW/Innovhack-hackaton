@@ -31,6 +31,7 @@ import {
   BorderRadius,
   Shadows,
 } from "../constants/theme";
+import { getErrorMessage } from "../utils/errorHandler";
 
 export default function JoinChallengeScreen() {
   const { challengeId } = useLocalSearchParams<{ challengeId: string }>();
@@ -66,7 +67,7 @@ export default function JoinChallengeScreen() {
 
     const amount = parseInt(betAmount);
     if (!amount || amount < (challenge?.minBet || 0)) {
-      Alert.alert("Erreur", `Mise minimum: ${challenge?.minBet}€`);
+      Alert.alert("Erreur", `Engagement minimum: ${challenge?.minBet}€`);
       return;
     }
 
@@ -85,7 +86,7 @@ export default function JoinChallengeScreen() {
       });
       router.back();
     } catch (err: any) {
-      Alert.alert("Erreur", err.message || "Erreur");
+      Alert.alert("Oups!", getErrorMessage(err));
     } finally {
       setIsSubmitting(false);
     }
@@ -171,7 +172,7 @@ export default function JoinChallengeScreen() {
                 <Ionicons name="checkmark" size={32} color={Colors.success} />
               </View>
               <Text style={styles.joinedTitle}>Tu participes déjà</Text>
-              <Text style={styles.joinedText}>Ta mise: {participation?.betAmount}€</Text>
+              <Text style={styles.joinedText}>Ton engagement: {participation?.betAmount}€</Text>
               <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                 <Text style={styles.backButtonText}>Retour</Text>
               </TouchableOpacity>
@@ -180,7 +181,7 @@ export default function JoinChallengeScreen() {
             <>
               {/* Bet Section */}
               <Animated.View entering={FadeInDown.delay(150).duration(400)} style={styles.betSection}>
-                <Text style={styles.sectionTitle}>Choisis ta mise</Text>
+                <Text style={styles.sectionTitle}>Choisis ton engagement</Text>
                 <Text style={styles.sectionSubtitle}>Minimum {challenge.minBet}€</Text>
 
                 {/* Quick Amounts */}
@@ -231,7 +232,7 @@ export default function JoinChallengeScreen() {
               <Animated.View entering={FadeInDown.delay(180).duration(400)} style={styles.infoBox}>
                 <Ionicons name="information-circle-outline" size={18} color={Colors.info} />
                 <Text style={styles.infoText}>
-                  Si tu réussis le défi, tu récupères ta mise + une part du pot des perdants.
+                  Si tu réussis le défi, tu récupères ton engagement + une part du pot des perdants.
                 </Text>
               </Animated.View>
 
@@ -259,7 +260,7 @@ export default function JoinChallengeScreen() {
                     <>
                       <Ionicons name="flash" size={20} color={Colors.white} />
                       <Text style={styles.submitButtonText}>
-                        Miser {betAmount || challenge.minBet}€
+                        S'engager {betAmount || challenge.minBet}€
                       </Text>
                     </>
                   )}

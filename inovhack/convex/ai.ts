@@ -1,7 +1,6 @@
 // Featherless AI integration
 // API compatible OpenAI
 
-const FEATHERLESS_API_KEY = "rc_bc15b2d842faf40974eabdc44aa0a2f876fa31d247713bc2a50633fe582cad56";
 const FEATHERLESS_API_URL = "https://api.featherless.ai/v1/chat/completions";
 
 // Modèle à utiliser
@@ -13,11 +12,16 @@ interface Message {
 }
 
 export async function callAI(messages: Message[]): Promise<string> {
+  const apiKey = process.env.FEATHERLESS_API_KEY;
+  if (!apiKey) {
+    throw new Error("FEATHERLESS_API_KEY not configured in Convex environment variables");
+  }
+
   const response = await fetch(FEATHERLESS_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${FEATHERLESS_API_KEY}`,
+      "Authorization": `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
       model: MODEL,

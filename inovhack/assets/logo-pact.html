@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PACT Logo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 60px;
+      background: #FAFAF8;
+      padding: 40px;
+    }
+
+    .logo-showcase {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .logo-label {
+      font-family: 'Outfit', sans-serif;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #71717A;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       THE PACT LOGO
+       ═══════════════════════════════════════════════════════════════ */
+    .pact-logo {
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-weight: 400;
+      letter-spacing: -0.03em;
+      color: #18181B;
+      line-height: 1;
+    }
+
+    .pact-logo .accent {
+      color: #C9705F;
+    }
+
+    /* Size variants */
+    .pact-logo.small { font-size: 24px; }
+    .pact-logo.medium { font-size: 32px; }
+    .pact-logo.large { font-size: 48px; }
+    .pact-logo.xlarge { font-size: 72px; }
+    .pact-logo.huge { font-size: 120px; }
+
+    /* Dark variant */
+    .dark-bg {
+      background: #18181B;
+      padding: 40px 60px;
+      border-radius: 16px;
+    }
+
+    .pact-logo.light {
+      color: #FFFFFF;
+    }
+
+    .pact-logo.light .accent {
+      color: #E8927C;
+    }
+
+    /* Color reference */
+    .color-ref {
+      display: flex;
+      gap: 20px;
+      margin-top: 40px;
+    }
+
+    .color-swatch {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .swatch {
+      width: 60px;
+      height: 60px;
+      border-radius: 12px;
+      border: 1px solid #E4E4E7;
+    }
+
+    .swatch.primary { background: #18181B; }
+    .swatch.accent { background: #C9705F; }
+    .swatch.accent-light { background: #E8927C; }
+
+    .swatch-label {
+      font-family: 'SF Mono', monospace;
+      font-size: 11px;
+      color: #71717A;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Size variants -->
+  <div class="logo-showcase">
+    <span class="logo-label">Small (24px)</span>
+    <span class="pact-logo small">P<span class="accent">A</span>CT</span>
+  </div>
+
+  <div class="logo-showcase">
+    <span class="logo-label">Medium (32px)</span>
+    <span class="pact-logo medium">P<span class="accent">A</span>CT</span>
+  </div>
+
+  <div class="logo-showcase">
+    <span class="logo-label">Large (48px)</span>
+    <span class="pact-logo large">P<span class="accent">A</span>CT</span>
+  </div>
+
+  <div class="logo-showcase">
+    <span class="logo-label">XLarge (72px)</span>
+    <span class="pact-logo xlarge">P<span class="accent">A</span>CT</span>
+  </div>
+
+  <div class="logo-showcase">
+    <span class="logo-label">Huge (120px)</span>
+    <span class="pact-logo huge">P<span class="accent">A</span>CT</span>
+  </div>
+
+  <!-- Dark background variant -->
+  <div class="logo-showcase">
+    <span class="logo-label">On Dark Background</span>
+    <div class="dark-bg">
+      <span class="pact-logo xlarge light">P<span class="accent">A</span>CT</span>
+    </div>
+  </div>
+
+  <!-- Color reference -->
+  <div class="color-ref">
+    <div class="color-swatch">
+      <div class="swatch primary"></div>
+      <span class="swatch-label">#18181B</span>
+    </div>
+    <div class="color-swatch">
+      <div class="swatch accent"></div>
+      <span class="swatch-label">#C9705F</span>
+    </div>
+    <div class="color-swatch">
+      <div class="swatch accent-light"></div>
+      <span class="swatch-label">#E8927C</span>
+    </div>
+  </div>
+
+</body>
+</html>

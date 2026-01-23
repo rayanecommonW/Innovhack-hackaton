@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="200" height="60">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:wght@400&amp;display=swap');
+      .logo-text { font-family: 'Instrument Serif', Georgia, serif; font-size: 48px; font-weight: 400; letter-spacing: -0.03em; }
+      .logo-primary { fill: #18181B; }
+      .logo-accent { fill: #C9705F; }
+    </style>
+  </defs>
+  <text x="10" y="46" class="logo-text">
+    <tspan class="logo-primary">P</tspan><tspan class="logo-accent">A</tspan><tspan class="logo-primary">CT</tspan>
+  </text>
+</svg>

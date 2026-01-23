@@ -105,6 +105,22 @@ export const seedBadges = mutation({
   },
 });
 
+// Version interne pour le cron job
+export const seedBadgesInternal = internalMutation({
+  handler: async (ctx) => {
+    const existingBadges = await ctx.db.query("badges").first();
+    // Only seed if no badges exist at all
+    if (!existingBadges) {
+      for (const badge of BADGE_DEFINITIONS) {
+        await ctx.db.insert("badges", badge);
+      }
+      console.log(`[Badges] Seeded ${BADGE_DEFINITIONS.length} badges`);
+      return { seeded: BADGE_DEFINITIONS.length };
+    }
+    return { seeded: 0 };
+  },
+});
+
 // Vérifier et débloquer les badges pour un utilisateur
 export const checkAndUnlockBadges = internalMutation({
   args: { userId: v.id("users") },
@@ -143,6 +159,199 @@ export const checkAndUnlockBadges = internalMutation({
         case "participation":
           shouldUnlock = (user.totalPacts || 0) >= badge.requirement;
           break;
+        case "special":
+          // Handle special badges
+          if (badge.name === "early_adopter") {
+            // Check if user is among first 1000
+            const allUsers = await ctx.db.query("users").collect();
+            const sortedUsers = allUsers.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+            const userIndex = sortedUsers.findIndex(u => u._id === args.userId);
+            shouldUnlock = userIndex >= 0 && userIndex < 1000;
+          } else if (badge.name === "first_deposit") {
+            // Check if user has ever added funds
+            const transactions = await ctx.db
+              .query("transactions")
+              .withIndex("by_user", (q) => q.eq("userId", args.userId))
+              .filter((q) => q.eq(q.field("type"), "deposit"))
+              .first();
+            shouldUnlock = !!transactions;
+          } else if (badge.name === "complete_profile") {
+            // Check if profile is complete (name, username, bio, profileImage)
+            shouldUnlock = !!(user.name && user.username && user.bio && (user.profileImageUrl || user.profileImageId));
+          } else if (badge.name === "high_roller") {
+            // Check if user has bet 100€+ on a single pact
+            const highBet = await ctx.db
+              .query("participations")
+              .withIndex("by_user", (q) => q.eq("usertId", args.userId))
+              .filter((q) => q.gte(q.field("betAmount"), 100))
+              .first();
+            shouldUnlock = !!highBet;
+          } else if (badge.name === "sponsor_win") {
+            // Check if user won a sponsored pact
+            const wonParticipations = await ctx.db
+              .query("participations")
+              .withIndex("by_user", (q) => q.eq("usertId", args.userId))
+              .filter((q) => q.eq(q.field("status"), "won"))
+              .collect();
+            for (const p of wonParticipations) {
+              const challenge = await ctx.db.get(p.challengeId);
+              if (challenge?.sponsorName) {
+                shouldUnlock = true;
+                break;
+              }
+            }
+          } else if (badge.name === "big_win") {
+            // Check if user earned 500€+ on a single pact
+            const bigEarning = await ctx.db
+              .query("participations")
+              .withIndex("by_user", (q) => q.eq("usertId", args.userId))
+              .filter((q) => q.and(
+                q.eq(q.field("status"), "won"),
+                q.gte(q.field("earnings"), 500)
+              ))
+              .first();
+            shouldUnlock = !!bigEarning;
+          } else if (badge.name === "comeback_king") {
+            // Check if user won after 3 consecutive losses
+            const participations = await ctx.db
+              .query("participations")
+              .withIndex("by_user", (q) => q.eq("usertId", args.userId))
+              .collect();
+            const sorted = participations.sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+            let consecutiveLosses = 0;
+            for (const p of sorted) {
+              if (p.status === "lost") {
+                consecutiveLosses++;
+              } else if (p.status === "won" && consecutiveLosses >= 3) {
+                shouldUnlock = true;
+                break;
+              } else if (p.status === "won") {
+                consecutiveLosses = 0;
+              }
+            }
+          } else if (badge.name === "weekend_warrior") {
+            // Check if user won 10+ pacts on weekends
+            const wonParticipations = await ctx.db
+              .query("participations")
+              .withIndex("by_user", (q) => q.eq("usertId", args.userId))
+              .filter((q) => q.eq(q.field("status"), "won"))
+              .collect();
+            let weekendWins = 0;
+            for (const p of wonParticipations) {
+              const day = new Date(p.joinedAt || 0).getDay();
+              if (day === 0 || day === 6) weekendWins++;
+            }
+            shouldUnlock = weekendWins >= badge.requirement;
+          }
+          break;
+
+        // Category-specific badges (sport, nutrition, finance, etc.)
+        case "category_sport":
+        case "category_nutrition":
+        case "category_finance":
+        case "category_productivity":
+        case "category_wellness":
+        case "category_learning": {
+          const categoryMap: Record<string, string[]> = {
+            "category_sport": ["sport", "steps", "running", "fitness", "workout"],
+            "category_nutrition": ["nutrition", "diet", "healthy_eating", "food"],
+            "category_finance": ["finance", "savings", "budget", "money"],
+            "category_productivity": ["productivity", "work", "organization", "focus"],
+            "category_wellness": ["wellness", "meditation", "sleep", "mindfulness"],
+            "category_learning": ["learning", "reading", "study", "education", "language"],
+          };
+          const validCategories = categoryMap[badge.category] || [];
+          const wonParticipations = await ctx.db
+            .query("participations")
+            .withIndex("by_user", (q) => q.eq("usertId", args.userId))
+            .filter((q) => q.eq(q.field("status"), "won"))
+            .collect();
+          let categoryWins = 0;
+          for (const p of wonParticipations) {
+            const challenge = await ctx.db.get(p.challengeId);
+            if (challenge && validCategories.includes(challenge.category)) {
+              categoryWins++;
+            }
+          }
+          shouldUnlock = categoryWins >= badge.requirement;
+          break;
+        }
+
+        // Creation badges
+        case "creation": {
+          const createdChallenges = await ctx.db
+            .query("challenges")
+            .withIndex("by_creator", (q) => q.eq("creatorId", args.userId))
+            .collect();
+          shouldUnlock = createdChallenges.length >= badge.requirement;
+          break;
+        }
+
+        // Validation badges (voting on proofs)
+        case "validation": {
+          const votes = await ctx.db
+            .query("proofVotes")
+            .withIndex("by_voter", (q) => q.eq("voterId", args.userId))
+            .collect();
+          shouldUnlock = votes.length >= badge.requirement;
+          break;
+        }
+
+        // Timing badges
+        case "timing": {
+          const proofs = await ctx.db
+            .query("proofs")
+            .withIndex("by_user", (q) => q.eq("userId", args.userId))
+            .collect();
+
+          if (badge.name === "early_bird_5") {
+            // Proofs submitted before noon
+            const earlyProofs = proofs.filter(p => {
+              const hour = new Date(p.submittedAt).getHours();
+              return hour < 12;
+            });
+            shouldUnlock = earlyProofs.length >= badge.requirement;
+          } else if (badge.name === "night_owl_5") {
+            // Proofs submitted after 10pm
+            const nightProofs = proofs.filter(p => {
+              const hour = new Date(p.submittedAt).getHours();
+              return hour >= 22;
+            });
+            shouldUnlock = nightProofs.length >= badge.requirement;
+          } else if (badge.name === "last_minute_3") {
+            // Proofs submitted in the last hour before deadline
+            let lastMinuteCount = 0;
+            for (const p of proofs) {
+              const challenge = await ctx.db.get(p.challengeId);
+              if (challenge) {
+                const timeToDeadline = challenge.endDate - p.submittedAt;
+                if (timeToDeadline > 0 && timeToDeadline <= 60 * 60 * 1000) {
+                  lastMinuteCount++;
+                }
+              }
+            }
+            shouldUnlock = lastMinuteCount >= badge.requirement;
+          }
+          break;
+        }
+
+        // Group badges
+        case "groups": {
+          if (badge.name === "group_creator") {
+            const createdGroups = await ctx.db
+              .query("groups")
+              .filter((q) => q.eq(q.field("creatorId"), args.userId))
+              .collect();
+            shouldUnlock = createdGroups.length >= badge.requirement;
+          } else if (badge.name === "group_5") {
+            const memberships = await ctx.db
+              .query("groupMembers")
+              .withIndex("by_user", (q) => q.eq("userId", args.userId))
+              .collect();
+            shouldUnlock = memberships.length >= badge.requirement;
+          }
+          break;
+        }
       }
 
       if (shouldUnlock) {
@@ -214,8 +423,15 @@ export const getAllBadgesWithStatus = query({
     const user = await ctx.db.get(args.userId);
     const unlockedBadgeIds = userBadges.map((ub) => ub.badgeId);
 
-    return badges.map((badge) => {
-      const isUnlocked = unlockedBadgeIds.includes(badge._id);
+    // If badges table is empty, use BADGE_DEFINITIONS directly
+    const badgesToUse = badges.length > 0 ? badges : BADGE_DEFINITIONS.map((b, i) => ({
+      ...b,
+      _id: `temp-${i}` as any,
+      _creationTime: Date.now(),
+    }));
+
+    return badgesToUse.map((badge) => {
+      const isUnlocked = badges.length > 0 ? unlockedBadgeIds.includes(badge._id) : false;
       const userBadge = userBadges.find((ub) => ub.badgeId === badge._id);
 
       // Calculer la progression
@@ -236,6 +452,35 @@ export const getAllBadgesWithStatus = query({
             break;
           case "participation":
             progress = Math.min(100, ((user.totalPacts || 0) / badge.requirement) * 100);
+            break;
+          // Special badges are often boolean - show 100% if unlocked, 0% otherwise
+          case "special":
+            progress = isUnlocked ? 100 : 0;
+            break;
+          // Creation badges - track created challenges (using totalPacts as proxy for activity)
+          case "creation":
+            progress = isUnlocked ? 100 : 0;
+            break;
+          // Validation badges
+          case "validation":
+            progress = isUnlocked ? 100 : 0;
+            break;
+          // Timing badges
+          case "timing":
+            progress = isUnlocked ? 100 : 0;
+            break;
+          // Group badges
+          case "groups":
+            progress = isUnlocked ? 100 : 0;
+            break;
+          // Category-specific badges
+          case "category_sport":
+          case "category_nutrition":
+          case "category_finance":
+          case "category_productivity":
+          case "category_wellness":
+          case "category_learning":
+            progress = isUnlocked ? 100 : 0;
             break;
         }
       }
@@ -258,5 +503,105 @@ export const getBadgesByCategory = query({
       .query("badges")
       .withIndex("by_category", (q) => q.eq("category", args.category))
       .collect();
+  },
+});
+
+// Mutation publique pour déclencher manuellement la vérification des badges
+// Utile pour s'assurer que les badges sont vérifiés après certaines actions
+export const triggerBadgeCheck = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return { unlocked: [] };
+
+    const badges = await ctx.db.query("badges").collect();
+    const userBadges = await ctx.db
+      .query("userBadges")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    const unlockedBadgeIds = userBadges.map((ub) => ub.badgeId);
+    const newlyUnlocked: string[] = [];
+
+    for (const badge of badges) {
+      // Skip si déjà débloqué
+      if (unlockedBadgeIds.includes(badge._id)) continue;
+
+      let shouldUnlock = false;
+
+      switch (badge.category) {
+        case "wins":
+          shouldUnlock = (user.totalWins || 0) >= badge.requirement;
+          break;
+        case "streak":
+          shouldUnlock = (user.bestStreak || 0) >= badge.requirement;
+          break;
+        case "earnings":
+          shouldUnlock = (user.totalEarnings || 0) >= badge.requirement;
+          break;
+        case "social":
+          shouldUnlock = (user.referralCount || 0) >= badge.requirement;
+          break;
+        case "participation":
+          shouldUnlock = (user.totalPacts || 0) >= badge.requirement;
+          break;
+        case "special":
+          if (badge.name === "early_adopter") {
+            // Check if user is among first 1000
+            const allUsers = await ctx.db.query("users").collect();
+            const sortedUsers = allUsers.sort((a, b) => (a.createdAt || a._creationTime || 0) - (b.createdAt || b._creationTime || 0));
+            const userIndex = sortedUsers.findIndex(u => u._id === args.userId);
+            shouldUnlock = userIndex >= 0 && userIndex < 1000;
+          } else if (badge.name === "first_deposit") {
+            const transactions = await ctx.db
+              .query("transactions")
+              .withIndex("by_user", (q) => q.eq("userId", args.userId))
+              .filter((q) => q.eq(q.field("type"), "deposit"))
+              .first();
+            shouldUnlock = !!transactions;
+          } else if (badge.name === "complete_profile") {
+            shouldUnlock = !!(user.name && user.username && user.bio && (user.profileImageUrl || user.profileImageId));
+          } else if (badge.name === "high_roller") {
+            const highBet = await ctx.db
+              .query("participations")
+              .withIndex("by_user", (q) => q.eq("usertId", args.userId))
+              .filter((q) => q.gte(q.field("betAmount"), 100))
+              .first();
+            shouldUnlock = !!highBet;
+          }
+          break;
+        case "creation": {
+          const createdChallenges = await ctx.db
+            .query("challenges")
+            .withIndex("by_creator", (q) => q.eq("creatorId", args.userId))
+            .collect();
+          shouldUnlock = createdChallenges.length >= badge.requirement;
+          break;
+        }
+      }
+
+      if (shouldUnlock) {
+        await ctx.db.insert("userBadges", {
+          userId: args.userId,
+          badgeId: badge._id,
+          unlockedAt: Date.now(),
+        });
+
+        // Créer notification
+        await ctx.db.insert("notifications", {
+          userId: args.userId,
+          type: "badge_unlocked",
+          title: `Badge débloqué: ${badge.title}`,
+          body: badge.description,
+          data: JSON.stringify({ badgeId: badge._id, badgeName: badge.name }),
+          read: false,
+          createdAt: Date.now(),
+        });
+
+        newlyUnlocked.push(badge.title);
+      }
+    }
+
+    return { unlocked: newlyUnlocked };
   },
 });

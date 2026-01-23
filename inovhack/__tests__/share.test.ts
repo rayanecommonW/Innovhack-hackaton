@@ -35,7 +35,7 @@ describe('Share Utilities', () => {
     it('should return Play Store URL on Android', () => {
       Platform.OS = 'android';
       const { getAppStoreUrl } = require('../utils/share');
-      expect(getAppStoreUrl()).toBe('https://play.google.com/store/apps/details?id=com.pact.app');
+      expect(getAppStoreUrl()).toBe('https://play.google.com/store/apps/details?id=app.paact.ios');
     });
   });
 

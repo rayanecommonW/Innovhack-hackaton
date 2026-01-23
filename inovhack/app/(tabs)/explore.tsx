@@ -39,90 +39,6 @@ import {
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-// 6 Sponsored Challenges with real brands
-const SPONSORED_CHALLENGES = [
-  {
-    id: "sponsored-1",
-    title: "30 jours consécutifs d'apprentissage",
-    brandName: "Duolingo",
-    brandLogo: "https://www.google.com/s2/favicons?domain=duolingo.com&sz=128",
-    brandColor: "#58CC02",
-    minBet: 15,
-    reward: "3 mois Super Duolingo offerts",
-    category: "education",
-    duration: "30 jours",
-  },
-  {
-    id: "sponsored-2",
-    title: "Lire 4 livres ce mois",
-    brandName: "Fnac",
-    brandLogo: "https://www.google.com/s2/favicons?domain=fnac.com&sz=128",
-    brandColor: "#E1A925",
-    minBet: 20,
-    reward: "-30% sur ta prochaine commande",
-    category: "education",
-    duration: "1 mois",
-  },
-  {
-    id: "sponsored-3",
-    title: "Économiser 500€ ce mois",
-    brandName: "Boursorama",
-    brandLogo: "https://www.google.com/s2/favicons?domain=boursorama.com&sz=128",
-    brandColor: "#0066B2",
-    minBet: 10,
-    reward: "6 mois Bourso Premium offerts",
-    category: "finance",
-    duration: "1 mois",
-  },
-  {
-    id: "sponsored-4",
-    title: "Faire 100 appels API ce mois",
-    brandName: "OpenAI",
-    brandLogo: "https://www.google.com/s2/favicons?domain=openai.com&sz=128",
-    brandColor: "#10A37F",
-    minBet: 25,
-    reward: "50$ de crédits API offerts",
-    category: "productivity",
-    duration: "1 mois",
-  },
-  {
-    id: "sponsored-5",
-    title: "Regarder 10 documentaires ce mois",
-    brandName: "Netflix",
-    brandLogo: "https://www.google.com/s2/favicons?domain=netflix.com&sz=128",
-    brandColor: "#E50914",
-    minBet: 15,
-    reward: "1 mois d'abonnement offert",
-    category: "entertainment",
-    duration: "1 mois",
-  },
-  {
-    id: "sponsored-6",
-    title: "Lire 5 livres Kindle ce mois",
-    brandName: "Amazon",
-    brandLogo: "https://www.google.com/s2/favicons?domain=amazon.com&sz=128",
-    brandColor: "#FF9900",
-    minBet: 20,
-    reward: "Bon d'achat 30€ offert",
-    category: "education",
-    duration: "1 mois",
-  },
-];
-
-// 10 Popular Challenges
-const POPULAR_CHALLENGES = [
-  { id: "pop-1", title: "Se lever à 6h tous les jours", category: "productivity", minBet: 10, participants: 2847 },
-  { id: "pop-2", title: "Pas d'alcool pendant 30 jours", category: "health", minBet: 20, participants: 1923 },
-  { id: "pop-3", title: "Faire du sport 4x par semaine", category: "fitness", minBet: 15, participants: 3512 },
-  { id: "pop-4", title: "Lire 20 pages par jour", category: "education", minBet: 10, participants: 1456 },
-  { id: "pop-5", title: "Zéro réseaux sociaux le matin", category: "mental", minBet: 10, participants: 2134 },
-  { id: "pop-6", title: "Boire 2L d'eau par jour", category: "health", minBet: 5, participants: 4521 },
-  { id: "pop-7", title: "Marcher 30 min chaque jour", category: "fitness", minBet: 10, participants: 2876 },
-  { id: "pop-8", title: "Pas de sucre ajouté pendant 2 semaines", category: "nutrition", minBet: 15, participants: 1678 },
-  { id: "pop-9", title: "Apprendre une nouvelle compétence", category: "education", minBet: 25, participants: 987 },
-  { id: "pop-10", title: "Dormir 8h minimum chaque nuit", category: "health", minBet: 10, participants: 3245 },
-];
-
 // Content filter - block inappropriate content
 const BLOCKED_WORDS = [
   "branler", "masturb", "sexe", "porn", "nude", "naked", "xxx",
@@ -135,7 +51,7 @@ const isContentAppropriate = (text: string): boolean => {
 };
 
 const BET_RANGES = [
-  { id: "all", label: "Toutes les mises", min: 0, max: Infinity },
+  { id: "all", label: "Tous les engagements", min: 0, max: Infinity },
   { id: "small", label: "5€ - 15€", min: 5, max: 15 },
   { id: "medium", label: "15€ - 30€", min: 15, max: 30 },
   { id: "large", label: "30€ - 50€", min: 30, max: 50 },
@@ -145,8 +61,8 @@ const BET_RANGES = [
 const SORT_OPTIONS = [
   { id: "popular", label: "Populaire", icon: "flame-outline" },
   { id: "newest", label: "Récent", icon: "time-outline" },
-  { id: "bet_low", label: "Mise ↑", icon: "trending-up-outline" },
-  { id: "bet_high", label: "Mise ↓", icon: "trending-down-outline" },
+  { id: "bet_low", label: "Engagement ↑", icon: "trending-up-outline" },
+  { id: "bet_high", label: "Engagement ↓", icon: "trending-down-outline" },
 ];
 
 export default function ExploreScreen() {
@@ -343,7 +259,7 @@ export default function ExploreScreen() {
             <Animated.View entering={FadeInDown.duration(200)} style={styles.expandedFilters}>
               {/* Bet Range */}
               <View style={styles.filterGroup}>
-                <Text style={styles.filterGroupLabel}>Mise</Text>
+                <Text style={styles.filterGroupLabel}>Engagement</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterOptions}>
                   {BET_RANGES.map((range) => (
                     <TouchableOpacity
@@ -385,193 +301,99 @@ export default function ExploreScreen() {
           )}
         </Animated.View>
 
-        {/* 1. Pacts Sponsorisés */}
-        <Animated.View entering={FadeInDown.delay(140).duration(400)} style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleRow}>
-              <Ionicons name="sparkles-outline" size={18} color={Colors.accent} />
-              <Text style={styles.sectionTitle}>Pacts sponsorisés</Text>
-            </View>
-            <View style={styles.partnerBadge}>
-              <Text style={styles.partnerBadgeText}>Partenaires</Text>
-            </View>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalList}
-          >
-            {SPONSORED_CHALLENGES.map((challenge, index) => (
-              <Animated.View
-                key={challenge.id}
-                entering={FadeInRight.delay(160 + index * 40).duration(300)}
-              >
-                <TouchableOpacity
-                  style={styles.sponsoredCard}
-                  activeOpacity={0.9}
-                  onPress={() => router.push({
-                    pathname: "/join-sponsored",
-                    params: {
-                      id: challenge.id,
-                      title: challenge.title,
-                      brandName: challenge.brandName,
-                      brandLogo: challenge.brandLogo,
-                      brandColor: challenge.brandColor,
-                      minBet: challenge.minBet.toString(),
-                      reward: challenge.reward.toString(),
-                      category: challenge.category,
-                      duration: challenge.duration,
-                    }
-                  })}
-                >
-                  {/* Centered Brand Section */}
-                  <View style={styles.brandCenterSection}>
-                    <Image
-                      source={{ uri: challenge.brandLogo }}
-                      style={styles.brandLogoLarge}
-                    />
-                    <Text style={[styles.brandNameLarge, { color: challenge.brandColor }]}>
-                      {challenge.brandName}
-                    </Text>
-                    <View style={styles.partnerVerifiedBadge}>
-                      <Ionicons name="checkmark-circle" size={10} color={Colors.success} />
-                      <Text style={styles.partnerVerifiedText}>Partenaire</Text>
-                    </View>
-                  </View>
-
-                  <Text style={styles.sponsoredTitle} numberOfLines={2}>
-                    {challenge.title}
-                  </Text>
-
-                  <View style={styles.sponsoredMeta}>
-                    <View style={styles.durationBadge}>
-                      <Ionicons name="time-outline" size={12} color={Colors.textTertiary} />
-                      <Text style={styles.durationText}>{challenge.duration}</Text>
-                    </View>
-                  </View>
-
-                  {/* Reward Section with Gift Icon */}
-                  <View style={styles.sponsoredRewardSection}>
-                    <Ionicons name="gift-outline" size={16} color={Colors.success} />
-                    <Text style={styles.rewardTextCompact} numberOfLines={1}>{challenge.reward}</Text>
-                  </View>
-
-                  <View style={styles.sponsoredFooter}>
-                    <View style={styles.betSection}>
-                      <Text style={styles.betLabel}>Mise min.</Text>
-                      <Text style={styles.sponsoredBet}>{challenge.minBet}€</Text>
-                    </View>
-                    <View style={styles.joinSponsoredButton}>
-                      <Text style={styles.joinSponsoredText}>Rejoindre</Text>
-                      <Ionicons name="arrow-forward" size={14} color={Colors.white} />
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              </Animated.View>
-            ))}
-          </ScrollView>
-        </Animated.View>
-
-        {/* 2. Idées Populaires */}
-        <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleRow}>
-              <Ionicons name="flame-outline" size={18} color={Colors.warning} />
-              <Text style={styles.sectionTitle}>Idées populaires</Text>
-            </View>
-            <View style={styles.inspirationBadge}>
-              <Text style={styles.inspirationBadgeText}>Inspiration</Text>
-            </View>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalList}
-          >
-            {POPULAR_CHALLENGES.map((challenge, index) => (
-              <Animated.View
-                key={challenge.id}
-                entering={FadeInRight.delay(220 + index * 35).duration(300)}
-              >
-                <TouchableOpacity
-                  onPress={() => router.push({ pathname: "/create-challenge", params: { title: challenge.title, category: challenge.category, minBet: challenge.minBet } })}
-                  style={styles.popularCard}
-                  activeOpacity={0.9}
-                >
-                  <View style={styles.popularHeader}>
-                    <View style={styles.participantsBadge}>
-                      <Ionicons name="people-outline" size={12} color={Colors.textSecondary} />
-                      <Text style={styles.participantsText}>{challenge.participants.toLocaleString()}</Text>
-                    </View>
-                  </View>
-
-                  <Text style={styles.popularTitle} numberOfLines={2}>
-                    {challenge.title}
-                  </Text>
-
-                  <View style={styles.popularFooter}>
-                    <View style={styles.categoryBadge}>
-                      <Text style={styles.categoryBadgeText}>
-                        {getCategoryName(challenge.category)}
-                      </Text>
-                    </View>
-                    <Text style={styles.popularBet}>{challenge.minBet}€</Text>
-                  </View>
-                </TouchableOpacity>
-              </Animated.View>
-            ))}
-          </ScrollView>
-        </Animated.View>
-
-        {/* 3. Pacts Communautaires */}
-        <Animated.View entering={FadeInDown.delay(260).duration(400)} style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleRow}>
-              <Ionicons name="globe-outline" size={18} color={Colors.info} />
-              <Text style={styles.sectionTitle}>Pacts communautaires</Text>
-            </View>
-          </View>
-
-          {challenges === undefined ? (
-            <ActivityIndicator color={Colors.accent} style={{ padding: Spacing.lg }} />
-          ) : filteredChallenges.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <View style={styles.emptyIconBox}>
-                <Ionicons name="rocket-outline" size={28} color={Colors.accent} />
+        {/* 1. Pacts Sponsorisés - Only show if there are real sponsored challenges */}
+        {filteredSponsored.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(140).duration(400)} style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <Ionicons name="sparkles-outline" size={18} color={Colors.accent} />
+                <Text style={styles.sectionTitle}>Pacts sponsorisés</Text>
               </View>
-              <Text style={styles.emptyCardTitle}>Aucun pact disponible</Text>
-              <Text style={styles.emptyCardText}>
-                Sois le premier à créer un défi
-              </Text>
-              <View style={styles.emptyCardActions}>
-                <TouchableOpacity
-                  onPress={() => router.push("/create-challenge")}
-                  style={styles.createPactButton}
+              <View style={styles.partnerBadge}>
+                <Text style={styles.partnerBadgeText}>Partenaires</Text>
+              </View>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+            >
+              {filteredSponsored.map((challenge: any, index: number) => (
+                <Animated.View
+                  key={challenge._id}
+                  entering={FadeInRight.delay(160 + index * 40).duration(300)}
                 >
-                  <Ionicons name="add" size={18} color={Colors.white} />
-                  <Text style={styles.createPactButtonText}>Créer un pact</Text>
-                </TouchableOpacity>
-                {userId && (
                   <TouchableOpacity
-                    onPress={handleSeedDemo}
-                    disabled={isSeeding}
-                    style={styles.seedDemoButton}
+                    style={styles.sponsoredCard}
+                    activeOpacity={0.9}
+                    onPress={() => handleJoinChallenge(challenge._id)}
                   >
-                    {isSeeding ? (
-                      <ActivityIndicator size="small" color={Colors.accent} />
-                    ) : (
-                      <>
-                        <Ionicons name="sparkles-outline" size={16} color={Colors.accent} />
-                        <Text style={styles.seedDemoButtonText}>Démos</Text>
-                      </>
+                    {/* Centered Brand Section */}
+                    <View style={styles.brandCenterSection}>
+                      {challenge.sponsorLogo && (
+                        <Image
+                          source={{ uri: challenge.sponsorLogo }}
+                          style={styles.brandLogoLarge}
+                        />
+                      )}
+                      <Text style={[styles.brandNameLarge, { color: challenge.sponsorColor || Colors.accent }]}>
+                        {challenge.sponsorName}
+                      </Text>
+                      <View style={styles.partnerVerifiedBadge}>
+                        <Ionicons name="checkmark-circle" size={10} color={Colors.success} />
+                        <Text style={styles.partnerVerifiedText}>Partenaire</Text>
+                      </View>
+                    </View>
+
+                    <Text style={styles.sponsoredTitle} numberOfLines={2}>
+                      {challenge.title}
+                    </Text>
+
+                    <View style={styles.sponsoredMeta}>
+                      <View style={styles.durationBadge}>
+                        <Ionicons name="time-outline" size={12} color={Colors.textTertiary} />
+                        <Text style={styles.durationText}>
+                          {challenge.duration ? `${challenge.duration} jours` : "30 jours"}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Reward Section with Gift Icon */}
+                    {challenge.sponsorReward && (
+                      <View style={styles.sponsoredRewardSection}>
+                        <Ionicons name="gift-outline" size={16} color={Colors.success} />
+                        <Text style={styles.rewardTextCompact} numberOfLines={1}>{challenge.sponsorReward}</Text>
+                      </View>
                     )}
+
+                    <View style={styles.sponsoredFooter}>
+                      <View style={styles.betSection}>
+                        <Text style={styles.betLabel}>Engagement min.</Text>
+                        <Text style={styles.sponsoredBet}>{challenge.minBet}€</Text>
+                      </View>
+                      <View style={styles.joinSponsoredButton}>
+                        <Text style={styles.joinSponsoredText}>Rejoindre</Text>
+                        <Ionicons name="arrow-forward" size={14} color={Colors.white} />
+                      </View>
+                    </View>
                   </TouchableOpacity>
-                )}
+                </Animated.View>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        )}
+
+        {/* Pacts Communautaires - Only show if there are real challenges */}
+        {filteredChallenges.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <Ionicons name="globe-outline" size={18} color={Colors.info} />
+                <Text style={styles.sectionTitle}>Pacts communautaires</Text>
               </View>
             </View>
-          ) : (
+
             <View style={styles.challengesList}>
               {filteredChallenges.slice(0, 10).map((challenge: any, index: number) => (
                 <Animated.View
@@ -611,52 +433,19 @@ export default function ExploreScreen() {
                 </Animated.View>
               ))}
             </View>
-          )}
-        </Animated.View>
+          </Animated.View>
+        )}
 
-        {/* 4. Pacts de mes amis */}
-        <Animated.View entering={FadeInDown.delay(300).duration(400)} style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleRow}>
-              <Ionicons name="people-outline" size={18} color={Colors.accent} />
-              <Text style={styles.sectionTitle}>Pacts de mes amis</Text>
+        {/* Pacts de mes amis - Only show if there are friends' challenges */}
+        {filteredFriendsChallenges.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(250).duration(400)} style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <Ionicons name="people-outline" size={18} color={Colors.accent} />
+                <Text style={styles.sectionTitle}>Pacts de mes amis</Text>
+              </View>
             </View>
-          </View>
 
-          {!userId ? (
-            <View style={styles.friendsEmptyCard}>
-              <View style={styles.emptyIconBox}>
-                <Ionicons name="person-add-outline" size={28} color={Colors.textTertiary} />
-              </View>
-              <Text style={styles.friendsEmptyTitle}>Connexion requise</Text>
-              <Text style={styles.friendsEmptyText}>Connecte-toi pour voir les pacts de tes amis</Text>
-              <TouchableOpacity
-                onPress={() => router.push("/auth")}
-                style={styles.connectButton}
-              >
-                <Text style={styles.connectButtonText}>Se connecter</Text>
-              </TouchableOpacity>
-            </View>
-          ) : friendsChallenges === undefined ? (
-            <ActivityIndicator color={Colors.accent} style={{ padding: Spacing.lg }} />
-          ) : filteredFriendsChallenges.length === 0 ? (
-            <View style={styles.friendsEmptyCard}>
-              <View style={styles.emptyIconBox}>
-                <Ionicons name="people-outline" size={28} color={Colors.textTertiary} />
-              </View>
-              <Text style={styles.friendsEmptyTitle}>Aucun ami</Text>
-              <Text style={styles.friendsEmptyText}>
-                Ajoute des amis depuis ton profil
-              </Text>
-              <TouchableOpacity
-                onPress={() => router.push("/(tabs)/profile")}
-                style={styles.addFriendsButton}
-              >
-                <Ionicons name="person-add-outline" size={16} color={Colors.accent} />
-                <Text style={styles.addFriendsButtonText}>Ajouter des amis</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
             <View style={styles.friendsChallengesList}>
               {filteredFriendsChallenges.map((challenge: any, index: number) => (
                 <Animated.View
@@ -696,8 +485,32 @@ export default function ExploreScreen() {
                 </Animated.View>
               ))}
             </View>
-          )}
-        </Animated.View>
+          </Animated.View>
+        )}
+
+        {/* Empty State - Show when no challenges exist */}
+        {filteredSponsored.length === 0 && filteredChallenges.length === 0 && filteredFriendsChallenges.length === 0 && !refreshing && (
+          <Animated.View entering={FadeInDown.delay(200).duration(400)} style={styles.emptyStateContainer}>
+            <View style={styles.emptyStateCard}>
+              <View style={styles.emptyStateIconBox}>
+                <Ionicons name="compass-outline" size={40} color={Colors.accent} />
+              </View>
+              <Text style={styles.emptyStateTitle}>Aucun pact disponible</Text>
+              <Text style={styles.emptyStateText}>
+                Personne n'a encore créé de pact public.{"\n"}
+                Sois le premier à lancer un défi !
+              </Text>
+              <TouchableOpacity
+                style={styles.emptyStateButton}
+                onPress={() => router.push("/create-challenge")}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add-circle-outline" size={18} color={Colors.white} />
+                <Text style={styles.emptyStateButtonText}>Créer un pact</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        )}
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -1330,5 +1143,56 @@ const styles = StyleSheet.create({
 
   bottomSpacer: {
     height: 120,
+  },
+
+  // Empty State
+  emptyStateContainer: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xl,
+  },
+  emptyStateCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    alignItems: "center",
+    ...Shadows.sm,
+  },
+  emptyStateIconBox: {
+    width: 80,
+    height: 80,
+    backgroundColor: Colors.accentMuted,
+    borderRadius: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: Spacing.lg,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+    marginBottom: Spacing.sm,
+    textAlign: "center",
+  },
+  emptyStateText: {
+    fontSize: 14,
+    fontWeight: "400",
+    color: Colors.textTertiary,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: Spacing.lg,
+  },
+  emptyStateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.accent,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.full,
+    gap: Spacing.sm,
+  },
+  emptyStateButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: Colors.white,
   },
 });

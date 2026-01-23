@@ -64,7 +64,7 @@ export default function JoinSponsoredScreen() {
 
     const amount = parseInt(betAmount);
     if (!amount || amount < minBet) {
-      Alert.alert("Erreur", `Mise minimum: ${minBet}€`);
+      Alert.alert("Erreur", `Engagement minimum: ${minBet}€`);
       return;
     }
 
@@ -180,7 +180,7 @@ export default function JoinSponsoredScreen() {
 
           {/* Bet Section */}
           <Animated.View entering={FadeInDown.delay(150).duration(400)} style={styles.betSection}>
-            <Text style={styles.sectionTitle}>Choisis ta mise</Text>
+            <Text style={styles.sectionTitle}>Choisis ton engagement</Text>
             <Text style={styles.sectionSubtitle}>Minimum {minBet}€</Text>
 
             {/* Quick Amounts */}

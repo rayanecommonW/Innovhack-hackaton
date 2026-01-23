@@ -1,5 +1,9 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, action } from "./_generated/server";
 import { v } from "convex/values";
+import { api, internal } from "./_generated/api";
+import { validateProof as aiValidateProof } from "./ai";
+import { Id } from "./_generated/dataModel";
+import { verifyAuthenticatedUser } from "./authHelper";
 
 // Soumettre une preuve
 export const submitProof = mutation({
@@ -11,6 +15,9 @@ export const submitProof = mutation({
     proofValue: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est bien celui qui soumet
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     // Vérifier la participation
     const participation = await ctx.db
       .query("participations")
@@ -96,6 +103,9 @@ export const validateProof = mutation({
     comment: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est le validateur
+    await verifyAuthenticatedUser(ctx, args.validatorId);
+
     const proof = await ctx.db.get(args.proofId);
     if (!proof) throw new Error("Preuve non trouvée");
 
@@ -175,11 +185,19 @@ export const voteOnProof = mutation({
     comment: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est le votant
+    await verifyAuthenticatedUser(ctx, args.voterId);
+
     const proof = await ctx.db.get(args.proofId);
     if (!proof) throw new Error("Preuve non trouvée");
 
     if (proof.userId === args.voterId) {
       throw new Error("Tu ne peux pas voter pour ta propre preuve");
+    }
+
+    // Check if voting deadline has passed for group pacts
+    if (proof.groupValidationDeadline && Date.now() > proof.groupValidationDeadline) {
+      throw new Error("Le temps de vote est terminé");
     }
 
     // Vérifier si déjà voté
@@ -192,16 +210,33 @@ export const voteOnProof = mutation({
 
     if (existingVote) throw new Error("Tu as déjà voté");
 
-    // Vérifier que le voteur participe au challenge
-    const voterParticipation = await ctx.db
-      .query("participations")
-      .withIndex("by_challenge_user", (q) =>
-        q.eq("challengeId", proof.challengeId).eq("usertId", args.voterId)
-      )
-      .first();
+    const challenge = await ctx.db.get(proof.challengeId);
 
-    if (!voterParticipation) {
-      throw new Error("Tu dois participer au pact pour voter");
+    // For group pacts, check if voter is a group member
+    // For other pacts, check if voter is a participant
+    if (challenge?.type === "group" && challenge.groupId) {
+      const groupMembership = await ctx.db
+        .query("groupMembers")
+        .withIndex("by_group_user", (q) =>
+          q.eq("groupId", challenge.groupId!).eq("userId", args.voterId)
+        )
+        .first();
+
+      if (!groupMembership) {
+        throw new Error("Tu dois être membre du groupe pour voter");
+      }
+    } else {
+      // Vérifier que le voteur participe au challenge
+      const voterParticipation = await ctx.db
+        .query("participations")
+        .withIndex("by_challenge_user", (q) =>
+          q.eq("challengeId", proof.challengeId).eq("usertId", args.voterId)
+        )
+        .first();
+
+      if (!voterParticipation) {
+        throw new Error("Tu dois participer au pact pour voter");
+      }
     }
 
     // Créer le vote
@@ -223,11 +258,46 @@ export const voteOnProof = mutation({
       rejectCount: newRejectCount,
     });
 
-    // Vérifier si le seuil de votes est atteint
+    // For group pacts: use percentage-based validation (50%+ approval)
+    // For other pacts: use fixed vote count
     const requiredVotes = proof.requiredVotes || 3;
-    const challenge = await ctx.db.get(proof.challengeId);
+    const totalVotes = newApproveCount + newRejectCount;
 
-    if (newApproveCount >= requiredVotes) {
+    // Determine if validation decision can be made
+    let shouldApprove = false;
+    let shouldReject = false;
+
+    if (challenge?.type === "group" && proof.totalGroupMembers) {
+      // For group pacts: percentage-based (50%+ of group approves = win)
+      const threshold = proof.validationPercentage || 50;
+      const totalMembers = proof.totalGroupMembers;
+
+      // Calculate percentage based on votes received
+      if (totalVotes > 0) {
+        const approvalRate = (newApproveCount / totalVotes) * 100;
+        const rejectionRate = (newRejectCount / totalVotes) * 100;
+
+        // Need at least half of the group to have voted for a decision
+        const minVotesNeeded = Math.ceil(totalMembers / 2);
+
+        if (totalVotes >= minVotesNeeded) {
+          if (approvalRate > threshold) {
+            shouldApprove = true;
+          } else if (rejectionRate > threshold) {
+            shouldReject = true;
+          }
+        }
+      }
+    } else {
+      // For other pacts: fixed vote count
+      if (newApproveCount >= requiredVotes) {
+        shouldApprove = true;
+      } else if (newRejectCount >= requiredVotes) {
+        shouldReject = true;
+      }
+    }
+
+    if (shouldApprove) {
       await ctx.db.patch(args.proofId, {
         communityValidation: "approved",
         validatedAt: Date.now(),
@@ -255,13 +325,13 @@ export const voteOnProof = mutation({
       await ctx.db.insert("notifications", {
         userId: proof.userId,
         type: "proof_approved",
-        title: "Preuve validée par la communauté !",
+        title: challenge?.type === "group" ? "Preuve validée par le groupe !" : "Preuve validée par la communauté !",
         body: `Ta preuve pour "${challenge?.title}" a été approuvée !`,
         data: JSON.stringify({ challengeId: proof.challengeId }),
         read: false,
         createdAt: Date.now(),
       });
-    } else if (newRejectCount >= requiredVotes) {
+    } else if (shouldReject) {
       await ctx.db.patch(args.proofId, {
         communityValidation: "rejected",
         validatedAt: Date.now(),
@@ -286,7 +356,7 @@ export const voteOnProof = mutation({
       await ctx.db.insert("notifications", {
         userId: proof.userId,
         type: "proof_rejected",
-        title: "Preuve refusée par la communauté",
+        title: challenge?.type === "group" ? "Preuve refusée par le groupe" : "Preuve refusée par la communauté",
         body: `Ta preuve pour "${challenge?.title}" a été rejetée.`,
         data: JSON.stringify({ challengeId: proof.challengeId }),
         read: false,
@@ -482,7 +552,17 @@ export const getProofsToValidateAsOrganizer = query({
           userWithImage = { ...user, profileImageUrl: imageUrl || user.profileImageUrl };
         }
 
-        return { ...proof, user: userWithImage, challenge, participation };
+        // Convert storage ID to URL if needed
+        let proofContentUrl = proof.proofContent;
+        if (proof.proofContent?.includes("storageId:")) {
+          const storageIdMatch = proof.proofContent.match(/storageId:([a-z0-9]+)/);
+          if (storageIdMatch) {
+            const storageUrl = await ctx.storage.getUrl(storageIdMatch[1] as any);
+            proofContentUrl = storageUrl || proof.proofContent;
+          }
+        }
+
+        return { ...proof, proofContent: proofContentUrl, user: userWithImage, challenge, participation };
       })
     );
 
@@ -526,15 +606,32 @@ export const validateProofAsOrganizer = mutation({
         validatedAt: Date.now(),
       });
 
-      // Mettre à jour les stats du user
+      // Mettre à jour les stats du user et distribuer les gains
       const user = await ctx.db.get(proof.userId);
       if (user && args.decision === "approved") {
         const newStreak = (user.currentStreak || 0) + 1;
+
+        // Calculer les gains: mise récupérée + bonus sponsor éventuel
+        const betAmount = participation.betAmount || 0;
+        const sponsorBonus = challenge.sponsorReward || 0;
+        const winAmount = betAmount * 2 + sponsorBonus; // Double mise + bonus
+
         await ctx.db.patch(proof.userId, {
+          balance: (user.balance || 0) + winAmount,
           totalWins: (user.totalWins || 0) + 1,
           currentStreak: newStreak,
           bestStreak: Math.max(user.bestStreak || 0, newStreak),
           totalPacts: (user.totalPacts || 0) + 1,
+        });
+
+        // Créer un enregistrement de récompense
+        await ctx.db.insert("rewards", {
+          challengeId: proof.challengeId,
+          userId: proof.userId,
+          amount: winAmount,
+          promoCode: challenge.sponsorPromoCode,
+          promoSponsor: challenge.sponsorName,
+          createdAt: Date.now(),
         });
       } else if (user && args.decision === "rejected") {
         await ctx.db.patch(proof.userId, {
@@ -555,17 +652,30 @@ export const validateProofAsOrganizer = mutation({
       createdAt: Date.now(),
     });
 
+    // Calculer les gains pour la notification
+    const betAmount = participation?.betAmount || 0;
+    const sponsorBonus = challenge.sponsorReward || 0;
+    const winAmount = betAmount * 2 + sponsorBonus;
+
     // Notifier le participant
     await ctx.db.insert("notifications", {
       userId: proof.userId,
       type: args.decision === "approved" ? "proof_approved" : "proof_rejected",
-      title: args.decision === "approved" ? "Preuve validée !" : "Preuve refusée",
+      title: args.decision === "approved" ? "Preuve validée ! 🎉" : "Preuve refusée",
       body: args.decision === "approved"
-        ? `Ta preuve pour "${challenge.title}" a été validée !`
+        ? `Ta preuve pour "${challenge.title}" a été validée ! Tu as gagné ${winAmount}€ !`
         : `Ta preuve pour "${challenge.title}" a été refusée.${args.comment ? ` Raison: ${args.comment}` : ""}`,
-      data: JSON.stringify({ challengeId: proof.challengeId, proofId: args.proofId }),
+      data: JSON.stringify({ challengeId: proof.challengeId, proofId: args.proofId, winAmount }),
       read: false,
       createdAt: Date.now(),
+    });
+
+    // Schedule push notification
+    await ctx.scheduler.runAfter(0, internal.pushNotifications.sendProofValidatedNotification, {
+      userId: proof.userId,
+      proofId: args.proofId,
+      challengeTitle: challenge.title,
+      approved: args.decision === "approved",
     });
 
     return { success: true };
@@ -608,6 +718,48 @@ export const getMyProofs = query({
       proofs.map(async (p) => {
         const challenge = await ctx.db.get(p.challengeId);
         return { ...p, challenge };
+      })
+    );
+
+    return enriched;
+  },
+});
+
+// Get user's pending proofs (awaiting organizer validation)
+export const getMyPendingProofs = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const proofs = await ctx.db
+      .query("proofs")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .filter((q) => q.eq(q.field("organizerValidation"), "pending"))
+      .collect();
+
+    const enriched = await Promise.all(
+      proofs.map(async (p) => {
+        const challenge = await ctx.db.get(p.challengeId);
+        const organizer = challenge ? await ctx.db.get(challenge.creatorId) : null;
+
+        // Convert storage ID to URL if needed
+        let proofContentUrl = p.proofContent;
+        if (p.proofContent?.includes("storageId:")) {
+          const storageIdMatch = p.proofContent.match(/storageId:([a-z0-9]+)/);
+          if (storageIdMatch) {
+            const storageUrl = await ctx.storage.getUrl(storageIdMatch[1] as any);
+            proofContentUrl = storageUrl || p.proofContent;
+          }
+        }
+
+        return {
+          ...p,
+          proofContent: proofContentUrl,
+          challenge,
+          organizer: organizer ? {
+            _id: organizer._id,
+            name: organizer.name,
+            profileImageUrl: organizer.profileImageUrl,
+          } : null,
+        };
       })
     );
 
@@ -684,15 +836,52 @@ export const getProofDetail = query({
       return acc;
     }, {} as Record<string, number>);
 
+    // Get messages for this proof
+    const messages = await ctx.db
+      .query("proofMessages")
+      .withIndex("by_proof", (q) => q.eq("proofId", args.proofId))
+      .collect();
+
+    const enrichedMessages = await Promise.all(
+      messages.map(async (m) => {
+        const msgUser = await ctx.db.get(m.userId);
+        return { ...m, user: msgUser };
+      })
+    );
+
+    // Get challenge creator info
+    let challengeWithCreator = challenge;
+    if (challenge) {
+      const creator = await ctx.db.get(challenge.creatorId);
+      let creatorWithImage = creator;
+      if (creator?.profileImageId) {
+        const imageUrl = await ctx.storage.getUrl(creator.profileImageId);
+        creatorWithImage = { ...creator, profileImageUrl: imageUrl || creator.profileImageUrl };
+      }
+      challengeWithCreator = { ...challenge, creator: creatorWithImage };
+    }
+
+    // Convert storage ID to URL if needed
+    let proofContentUrl = proof.proofContent;
+    if (proof.proofContent?.includes("storageId:")) {
+      const storageIdMatch = proof.proofContent.match(/storageId:([a-z0-9]+)/);
+      if (storageIdMatch) {
+        const storageUrl = await ctx.storage.getUrl(storageIdMatch[1] as any);
+        proofContentUrl = storageUrl || proof.proofContent;
+      }
+    }
+
     return {
       ...proof,
+      proofContent: proofContentUrl,
       user: userWithImage,
-      challenge,
+      challenge: challengeWithCreator,
       participation,
       comments: enrichedComments.sort((a, b) => a.createdAt - b.createdAt),
       reactions,
       reactionCounts,
       votes: enrichedVotes,
+      messages: enrichedMessages.sort((a, b) => a.createdAt - b.createdAt),
     };
   },
 });
@@ -730,5 +919,410 @@ export const getUserReaction = query({
       .first();
 
     return reaction?.emoji || null;
+  },
+});
+
+// Get proof by participation ID
+export const getProofByParticipation = query({
+  args: { participationId: v.id("participations") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("proofs")
+      .withIndex("by_participation", (q) => q.eq("participationId", args.participationId))
+      .first();
+  },
+});
+
+// Submit proof - Goes to organizer for manual validation (NO AI)
+export const submitAndValidateProof = action({
+  args: {
+    participationId: v.id("participations"),
+    proofContent: v.string(),
+    proofValue: v.optional(v.number()),
+  },
+  handler: async (ctx, args): Promise<{ success: boolean; validation: { approved: boolean; comment: string } }> => {
+    // Get participation
+    const participation = await ctx.runQuery(api.proofs.getParticipationForProof, {
+      participationId: args.participationId,
+    });
+
+    if (!participation) {
+      throw new Error("Participation non trouvée");
+    }
+
+    if (participation.status === "won" || participation.status === "lost") {
+      throw new Error("Ce pact est déjà terminé pour toi");
+    }
+
+    // Get challenge
+    const challenge = await ctx.runQuery(api.challenges.getChallenge, {
+      challengeId: participation.challengeId,
+    });
+
+    if (!challenge) {
+      throw new Error("Pact non trouvé");
+    }
+
+    // Vérifier les délais de soumission de preuve
+    const now = Date.now();
+    const pactDuration = challenge.endDate - challenge.startDate;
+    const isLongTermPact = pactDuration > 24 * 60 * 60 * 1000; // Plus de 24h
+    const gracePeriodMs = 24 * 60 * 60 * 1000; // 24h de grâce après la fin
+    const proofDeadline = challenge.endDate + gracePeriodMs;
+
+    // Pour les pacts long terme: ne peut soumettre qu'après la fin du pact
+    if (isLongTermPact && now < challenge.endDate) {
+      const hoursRemaining = Math.ceil((challenge.endDate - now) / (1000 * 60 * 60));
+      if (hoursRemaining > 24) {
+        const daysRemaining = Math.ceil(hoursRemaining / 24);
+        throw new Error(`Tu pourras soumettre ta preuve dans ${daysRemaining} jour(s), à la fin du pact.`);
+      } else {
+        throw new Error(`Tu pourras soumettre ta preuve dans ${hoursRemaining}h, à la fin du pact.`);
+      }
+    }
+
+    // Vérifier que la deadline de soumission n'est pas dépassée (fin pact + 24h)
+    if (now > proofDeadline) {
+      throw new Error("Le délai de soumission est dépassé (24h après la fin du pact).");
+    }
+
+    // Check if proof already exists
+    const existingProof = await ctx.runQuery(api.proofs.getProofByParticipation, {
+      participationId: args.participationId,
+    });
+
+    if (existingProof) {
+      // Return existing validation status
+      const approved = existingProof.organizerValidation === "approved";
+      return {
+        success: true,
+        validation: {
+          approved,
+          comment: approved ? "Preuve déjà validée" : "Preuve déjà soumise, en attente de validation par l'organisateur",
+        },
+      };
+    }
+
+    // Submit the proof - always pending, organizer will validate manually
+    await ctx.runMutation(api.proofs.submitProofForValidation, {
+      participationId: args.participationId,
+      challengeId: participation.challengeId,
+      userId: participation.usertId,
+      proofContent: args.proofContent,
+      proofValue: args.proofValue,
+    });
+
+    return {
+      success: true,
+      validation: {
+        approved: false, // Always pending until organizer validates
+        comment: "Preuve envoyée ! L'organisateur va la vérifier.",
+      },
+    };
+  },
+});
+
+// Mutation to submit proof for manual validation by organizer (NO AI)
+export const submitProofForValidation = mutation({
+  args: {
+    participationId: v.id("participations"),
+    challengeId: v.id("challenges"),
+    userId: v.id("users"),
+    proofContent: v.string(),
+    proofValue: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const challenge = await ctx.db.get(args.challengeId);
+    if (!challenge) throw new Error("Pact non trouvé");
+
+    const user = await ctx.db.get(args.userId);
+    const userName = user?.name || "Un participant";
+
+    // Vérifier les délais de soumission de preuve
+    const now = Date.now();
+    const pactDuration = challenge.endDate - challenge.startDate;
+    const isLongTermPact = pactDuration > 24 * 60 * 60 * 1000; // Plus de 24h
+    const gracePeridodMs = 24 * 60 * 60 * 1000; // 24h de grâce après la fin
+    const proofDeadline = challenge.endDate + gracePeridodMs;
+
+    // Pour les pacts long terme: ne peut soumettre qu'après la fin du pact
+    if (isLongTermPact && now < challenge.endDate) {
+      const hoursRemaining = Math.ceil((challenge.endDate - now) / (1000 * 60 * 60));
+      if (hoursRemaining > 24) {
+        const daysRemaining = Math.ceil(hoursRemaining / 24);
+        throw new Error(`Tu pourras soumettre ta preuve dans ${daysRemaining} jour(s), à la fin du pact.`);
+      } else {
+        throw new Error(`Tu pourras soumettre ta preuve dans ${hoursRemaining}h, à la fin du pact.`);
+      }
+    }
+
+    // Vérifier que la deadline de soumission n'est pas dépassée (fin pact + 24h)
+    if (now > proofDeadline) {
+      throw new Error("Le délai de soumission est dépassé (24h après la fin du pact).");
+    }
+
+    // For group pacts, calculate required votes based on group members
+    let requiredVotes = 2;
+    let totalGroupMembers = 0;
+    let groupValidationDeadline = undefined;
+    let validationPercentage = 50;
+
+    if (challenge.type === "group" && challenge.groupId) {
+      // Get group members count (excluding the proof submitter)
+      const groupMembers = await ctx.db
+        .query("groupMembers")
+        .withIndex("by_group", (q) => q.eq("groupId", challenge.groupId!))
+        .collect();
+
+      totalGroupMembers = groupMembers.filter((m) => m.userId !== args.userId).length;
+      validationPercentage = challenge.groupValidationThreshold || 50;
+
+      // Calculate required votes: more than 50% of group members (excluding submitter)
+      requiredVotes = Math.max(1, Math.ceil((totalGroupMembers * validationPercentage) / 100));
+
+      // Set deadline for group voting
+      const deadlineHours = challenge.groupValidationDeadlineHours || 24;
+      groupValidationDeadline = Date.now() + deadlineHours * 60 * 60 * 1000;
+    } else {
+      const participantCount = challenge.currentParticipants || 1;
+      requiredVotes = Math.max(2, Math.floor(participantCount / 2));
+    }
+
+    // Create proof - always pending until organizer validates (or group for group pacts)
+    const proofId = await ctx.db.insert("proofs", {
+      participationId: args.participationId,
+      challengeId: args.challengeId,
+      userId: args.userId,
+      proofContent: args.proofContent,
+      proofValue: args.proofValue,
+      proofType: args.proofContent.includes("storageId:") ? "image" : "text",
+      // For group pacts, skip organizer validation - go straight to community
+      organizerValidation: challenge.type === "group" ? "approved" : "pending",
+      communityValidation: challenge.type === "friends" || challenge.type === "group" ? "pending" : undefined,
+      approveCount: 0,
+      rejectCount: 0,
+      requiredVotes,
+      // Group validation specific fields
+      groupValidationDeadline,
+      totalGroupMembers: challenge.type === "group" ? totalGroupMembers : undefined,
+      validationPercentage: challenge.type === "group" ? validationPercentage : undefined,
+      submittedAt: Date.now(),
+    });
+
+    // Update participation status to pending validation
+    await ctx.db.patch(args.participationId, {
+      status: "pending_validation",
+      proofSubmittedAt: Date.now(),
+    });
+
+    // Create activity
+    await ctx.db.insert("activityFeed", {
+      userId: args.userId,
+      type: "submitted_proof",
+      targetId: proofId,
+      targetType: "proof",
+      metadata: JSON.stringify({ challengeId: args.challengeId, challengeTitle: challenge.title }),
+      createdAt: Date.now(),
+    });
+
+    // For group pacts, notify all group members; for others, notify organizer
+    if (challenge.type === "group" && challenge.groupId) {
+      // Notify all group members (except the proof submitter)
+      const groupMembers = await ctx.db
+        .query("groupMembers")
+        .withIndex("by_group", (q) => q.eq("groupId", challenge.groupId!))
+        .collect();
+
+      for (const member of groupMembers) {
+        if (member.userId !== args.userId) {
+          await ctx.db.insert("notifications", {
+            userId: member.userId,
+            type: "group_proof_to_validate",
+            title: "Preuve à valider",
+            body: `${userName} a soumis une preuve pour "${challenge.title}" - Vote maintenant!`,
+            data: JSON.stringify({ challengeId: args.challengeId, proofId, groupId: challenge.groupId }),
+            read: false,
+            createdAt: Date.now(),
+          });
+        }
+      }
+    } else {
+      // Notify organizer - they need to validate manually
+      await ctx.db.insert("notifications", {
+        userId: challenge.creatorId,
+        type: "proof_submitted",
+        title: "Nouvelle preuve à valider",
+        body: `${userName} a soumis une preuve pour "${challenge.title}"`,
+        data: JSON.stringify({ challengeId: args.challengeId, proofId }),
+        read: false,
+        createdAt: Date.now(),
+      });
+
+      // Push notification to organizer
+      await ctx.scheduler.runAfter(0, internal.pushNotifications.notifyUser, {
+        userId: challenge.creatorId,
+        title: "Nouvelle preuve à valider",
+        body: `${userName} a soumis une preuve pour "${challenge.title}"`,
+        data: { challengeId: args.challengeId, proofId },
+        type: "proof_submitted",
+      });
+    }
+
+    return proofId;
+  },
+});
+
+// Get group proofs that a user can vote on (as a group member)
+export const getGroupProofsToVote = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    // Get user's group memberships
+    const memberships = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    const groupIds = memberships.map((m) => m.groupId);
+    const allProofs: any[] = [];
+
+    for (const groupId of groupIds) {
+      // Get challenges in this group
+      const challenges = await ctx.db
+        .query("challenges")
+        .withIndex("by_group", (q) => q.eq("groupId", groupId))
+        .filter((q) => q.eq(q.field("type"), "group"))
+        .collect();
+
+      for (const challenge of challenges) {
+        // Get proofs for this challenge
+        const proofs = await ctx.db
+          .query("proofs")
+          .withIndex("by_challenge", (q) => q.eq("challengeId", challenge._id))
+          .collect();
+
+        // Filter: pending validation, not from this user, not expired
+        const now = Date.now();
+        const votableProofs = proofs.filter(
+          (p) =>
+            p.userId !== args.userId &&
+            p.communityValidation === "pending" &&
+            (!p.groupValidationDeadline || p.groupValidationDeadline > now)
+        );
+
+        // Check if user already voted
+        for (const proof of votableProofs) {
+          const hasVoted = await ctx.db
+            .query("votes")
+            .withIndex("by_proof_voter", (q) =>
+              q.eq("proofId", proof._id).eq("voterId", args.userId)
+            )
+            .first();
+
+          if (!hasVoted) {
+            // Enrich with user and challenge info
+            const user = await ctx.db.get(proof.userId);
+            let userWithImage = user;
+            if (user?.profileImageId) {
+              const imageUrl = await ctx.storage.getUrl(user.profileImageId);
+              userWithImage = { ...user, profileImageUrl: imageUrl || user.profileImageUrl };
+            }
+
+            const group = await ctx.db.get(groupId);
+
+            // Convert storage ID to URL if needed
+            let proofContentUrl = proof.proofContent;
+            if (proof.proofContent?.includes("storageId:")) {
+              const storageIdMatch = proof.proofContent.match(/storageId:([a-z0-9]+)/);
+              if (storageIdMatch) {
+                const storageUrl = await ctx.storage.getUrl(storageIdMatch[1] as any);
+                proofContentUrl = storageUrl || proof.proofContent;
+              }
+            }
+
+            // Get vote counts
+            const votes = await ctx.db
+              .query("votes")
+              .withIndex("by_proof", (q) => q.eq("proofId", proof._id))
+              .collect();
+
+            allProofs.push({
+              ...proof,
+              proofContent: proofContentUrl,
+              user: userWithImage,
+              challenge,
+              group,
+              voteCount: votes.length,
+              approveCount: votes.filter((v) => v.voteType === "approve").length,
+              rejectCount: votes.filter((v) => v.voteType === "reject").length,
+              timeRemaining: proof.groupValidationDeadline
+                ? Math.max(0, proof.groupValidationDeadline - now)
+                : null,
+            });
+          }
+        }
+      }
+    }
+
+    // Sort by deadline (urgent first)
+    return allProofs.sort((a, b) => {
+      if (a.groupValidationDeadline && b.groupValidationDeadline) {
+        return a.groupValidationDeadline - b.groupValidationDeadline;
+      }
+      return b.submittedAt - a.submittedAt;
+    });
+  },
+});
+
+// Send a message on a proof (user <-> organizer chat)
+export const sendProofMessage = mutation({
+  args: {
+    proofId: v.id("proofs"),
+    userId: v.id("users"),
+    message: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const proof = await ctx.db.get(args.proofId);
+    if (!proof) {
+      throw new Error("Preuve non trouvée");
+    }
+
+    const challenge = await ctx.db.get(proof.challengeId);
+    if (!challenge) {
+      throw new Error("Pact non trouvé");
+    }
+
+    // Only proof owner or organizer can send messages
+    const isOwner = proof.userId === args.userId;
+    const isOrganizer = challenge.creatorId === args.userId;
+
+    if (!isOwner && !isOrganizer) {
+      throw new Error("Non autorisé");
+    }
+
+    // Insert the message
+    const messageId = await ctx.db.insert("proofMessages", {
+      proofId: args.proofId,
+      userId: args.userId,
+      message: args.message,
+      createdAt: Date.now(),
+    });
+
+    // Get sender info for notification
+    const sender = await ctx.db.get(args.userId);
+
+    // Notify the other party
+    const recipientId = isOwner ? challenge.creatorId : proof.userId;
+
+    await ctx.db.insert("notifications", {
+      userId: recipientId,
+      type: "proof_message",
+      title: "Nouveau message",
+      body: `${sender?.name || "Quelqu'un"} t'a envoyé un message sur ta preuve`,
+      data: JSON.stringify({ proofId: args.proofId, messageId }),
+      read: false,
+      createdAt: Date.now(),
+    });
+
+    return messageId;
   },
 });

@@ -10,13 +10,19 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pact.app",
+      "bundleIdentifier": "app.paact.ios",
       "infoPlist": {
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
-      "package": "com.pact.app",
+      "package": "app.paact.ios",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -40,7 +46,7 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 392,
+          "imageWidth": 600,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
           "dark": {
@@ -52,21 +58,25 @@
         "expo-notifications",
         {
           "icon": "./assets/images/notification-icon.png",
-          "color": "#3B82F6",
+          "color": "#C9705F",
           "sounds": [],
           "mode": "production"
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
     "extra": {
-      "eas": {
-        "projectId": "your-eas-project-id"
+      "router": {
+        "origin": false
       },
-      "_comment": "Replace 'your-eas-project-id' with your actual EAS project ID from expo.dev to enable push notifications"
+      "eas": {
+        "projectId": "53b6fc36-623d-4ac7-b881-7ffce6d4e330"
+      }
     }
   }
 }

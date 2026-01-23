@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { verifyAuthenticatedUser } from "./authHelper";
 
 // Vote on a proof (approve or veto)
 export const voteOnProof = mutation({
@@ -9,6 +10,9 @@ export const voteOnProof = mutation({
     voteType: v.string(), // "approve" or "veto"
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est le votant
+    await verifyAuthenticatedUser(ctx, args.voterId);
+
     // Get the proof to find the challengeId
     const proof = await ctx.db.get(args.proofId);
     if (!proof) {
@@ -224,8 +228,19 @@ export const getProofsToVote = query({
           const user = await ctx.db.get(proof.userId);
           const challenge = await ctx.db.get(proof.challengeId);
 
+          // Convert storageId to URL if needed
+          let proofContentUrl = proof.proofContent;
+          if (proof.proofContent?.includes("storageId:")) {
+            const storageIdMatch = proof.proofContent.match(/storageId:([a-z0-9]+)/);
+            if (storageIdMatch) {
+              const storageUrl = await ctx.storage.getUrl(storageIdMatch[1] as any);
+              proofContentUrl = storageUrl || proof.proofContent;
+            }
+          }
+
           allProofs.push({
             ...proof,
+            proofContent: proofContentUrl,
             userName: user?.name || "Anonymous",
             challengeTitle: challenge?.title || "Unknown",
             proofDescription: challenge?.proofDescription || "",

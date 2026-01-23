@@ -130,7 +130,7 @@ export default function OrganizerValidationScreen() {
               <View style={styles.userInfo}>
                 <Text style={styles.userName}>{selectedProof.user?.name || "Utilisateur"}</Text>
                 <Text style={styles.userMeta}>
-                  Mise: {selectedProof.participation?.betAmount}€
+                  Engagement: {selectedProof.participation?.betAmount}€
                 </Text>
               </View>
               <View style={styles.submittedAt}>

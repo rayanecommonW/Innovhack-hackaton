@@ -4,6 +4,7 @@ import { v } from "convex/values";
 export default defineSchema({
   // Utilisateurs
   users: defineTable({
+    clerkId: v.optional(v.string()), // Clerk auth ID
     name: v.string(),
     email: v.string(),
     username: v.optional(v.string()),
@@ -30,13 +31,35 @@ export default defineSchema({
     // Modération
     blockedUsers: v.optional(v.array(v.id("users"))), // Utilisateurs bloqués
     isBlocked: v.optional(v.boolean()), // Compte bloqué par admin
+    isAdmin: v.optional(v.boolean()), // Admin PACT (peut résoudre les litiges)
     // Onboarding
     onboardingCompleted: v.optional(v.boolean()),
     createdAt: v.optional(v.number()),
+    // Stripe Connect
+    stripeConnectedAccountId: v.optional(v.string()),
+    stripeAccountStatus: v.optional(v.string()), // "none", "pending", "verified", "restricted"
+    stripeCustomerId: v.optional(v.string()),
+    // KYC (Stripe Identity)
+    kycStatus: v.optional(v.string()), // "none", "pending", "verified", "rejected", "requires_input"
+    kycVerified: v.optional(v.boolean()),
+    kycVerifiedAt: v.optional(v.number()),
+    kycSessionId: v.optional(v.string()),
+    kycStartedAt: v.optional(v.number()),
+    // Legal acceptance
+    termsAcceptedAt: v.optional(v.number()),
+    privacyAcceptedAt: v.optional(v.number()),
+    // Age verification
+    birthDate: v.optional(v.number()), // Timestamp de la date de naissance
+    ageVerified: v.optional(v.boolean()), // A confirmé avoir 18+
+    ageVerifiedAt: v.optional(v.number()), // Quand il a confirmé
+    // Chargeback tracking
+    chargebackCount: v.optional(v.number()), // Number of chargebacks received
   })
     .index("by_email", ["email"])
     .index("by_username", ["username"])
-    .index("by_referral_code", ["referralCode"]),
+    .index("by_clerkId", ["clerkId"])
+    .index("by_referral_code", ["referralCode"])
+    .index("by_stripe_account", ["stripeConnectedAccountId"]),
 
   // Défis
   challenges: defineTable({
@@ -65,10 +88,13 @@ export default defineSchema({
 
     // Dates
     startDate: v.number(),
-    endDate: v.number(),
+    endDate: v.number(), // Timestamp exact de fin (inclut l'heure)
+
+    // Période de grâce pour validation (24h après endDate)
+    validationDeadline: v.optional(v.number()), // endDate + 24h
 
     // Status
-    status: v.string(), // "pending", "active", "completed", "cancelled", "distributing"
+    status: v.string(), // "pending", "active", "completed", "cancelled", "distributing", "validating"
 
     // Sponsor (pour pacts B2B)
     sponsorId: v.optional(v.string()),
@@ -85,6 +111,11 @@ export default defineSchema({
     totalPot: v.optional(v.number()), // Pot total
     winnersCount: v.optional(v.number()), // Nombre de gagnants
     losersCount: v.optional(v.number()), // Nombre de perdants
+
+    // Group pact settings
+    allowMembersToJoin: v.optional(v.boolean()), // Allow group members to join
+    groupValidationDeadlineHours: v.optional(v.number()), // Hours for group to vote (default 24h)
+    groupValidationThreshold: v.optional(v.number()), // Percentage needed (default 50)
   })
     .index("by_status", ["status"])
     .index("by_type", ["type"])
@@ -134,6 +165,11 @@ export default defineSchema({
     vetoCount: v.optional(v.number()), // Legacy - votes contre
     requiredVotes: v.optional(v.number()), // Nombre de votes requis
 
+    // Group validation specific
+    groupValidationDeadline: v.optional(v.number()), // Timestamp until when group can vote
+    totalGroupMembers: v.optional(v.number()), // Total members in group at time of submission
+    validationPercentage: v.optional(v.number()), // Percentage threshold needed (default 50%)
+
     // Legacy - Validation IA (gardé pour compatibilité)
     aiValidation: v.optional(v.string()),
     aiComment: v.optional(v.string()),
@@ -179,6 +215,17 @@ export default defineSchema({
     .index("by_proof", ["proofId"])
     .index("by_proof_user", ["proofId", "userId"]),
 
+  // Messages de chat sur les preuves (entre user et organisateur)
+  proofMessages: defineTable({
+    proofId: v.id("proofs"),
+    userId: v.id("users"),
+    message: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_proof", ["proofId"])
+    .index("by_user", ["userId"])
+    .index("by_proof_created", ["proofId", "createdAt"]),
+
   // Gains distribués
   rewards: defineTable({
     challengeId: v.id("challenges"),
@@ -205,13 +252,15 @@ export default defineSchema({
     description: v.optional(v.string()),
     relatedChallengeId: v.optional(v.id("challenges")),
     stripePaymentIntentId: v.optional(v.string()),
+    stripeTransferId: v.optional(v.string()),
     createdAt: v.number(),
     completedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_status", ["status"])
     .index("by_type", ["type"])
-    .index("by_created", ["createdAt"]),
+    .index("by_created", ["createdAt"])
+    .index("by_stripe_payment", ["stripePaymentIntentId"]),
 
   // Badges / Achievements
   badges: defineTable({
@@ -356,6 +405,33 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_challenge_created", ["challengeId", "createdAt"]),
 
+  // Direct messages between users
+  directMessages: defineTable({
+    senderId: v.id("users"),
+    receiverId: v.id("users"),
+    content: v.string(),
+    type: v.string(), // "text", "image", "proof_link"
+    relatedProofId: v.optional(v.id("proofs")), // Link to proof if message is about a proof
+    read: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_sender", ["senderId"])
+    .index("by_receiver", ["receiverId"])
+    .index("by_sender_receiver", ["senderId", "receiverId"])
+    .index("by_created", ["createdAt"]),
+
+  // Conversations (cached for quick lookup)
+  conversations: defineTable({
+    participantIds: v.array(v.id("users")), // [userId1, userId2] sorted
+    lastMessageId: v.optional(v.id("directMessages")),
+    lastMessageContent: v.optional(v.string()),
+    lastMessageAt: v.number(),
+    unreadCount: v.object({
+      // Map of unread counts per user
+    }),
+  })
+    .index("by_last_message", ["lastMessageAt"]),
+
   // Leaderboard cache (mis à jour périodiquement)
   leaderboard: defineTable({
     userId: v.id("users"),
@@ -372,4 +448,74 @@ export default defineSchema({
     .index("by_user_period", ["userId", "period"])
     .index("by_user", ["userId"])
     .index("by_rank", ["period", "rank"]),
+
+  // Vérifications de preuves (audit trail)
+  proofVerifications: defineTable({
+    proofId: v.id("proofs"),
+    userId: v.id("users"),
+    // Métadonnées de capture
+    capturedAt: v.number(),
+    deviceTime: v.number(),
+    platform: v.string(),
+    captureMethod: v.string(),
+    imageHash: v.optional(v.string()),
+    location: v.optional(v.string()), // JSON stringifié
+    // Résultat de vérification
+    serverSubmissionTime: v.number(),
+    verificationScore: v.number(),
+    verificationConfidence: v.string(), // "high", "medium", "low", "suspicious"
+    verificationIssues: v.optional(v.string()),
+    verifiedAt: v.number(),
+  })
+    .index("by_proof", ["proofId"])
+    .index("by_user", ["userId"])
+    .index("by_confidence", ["verificationConfidence"]),
+
+  // Rate Limiting
+  rateLimits: defineTable({
+    identifier: v.string(), // userId ou IP
+    action: v.string(), // Nom de l'action
+    timestamp: v.number(),
+  })
+    .index("by_identifier_action", ["identifier", "action"])
+    .index("by_timestamp", ["timestamp"]),
+
+  // Litiges / Contestations
+  disputes: defineTable({
+    proofId: v.id("proofs"),
+    challengeId: v.id("challenges"),
+    disputerId: v.id("users"), // Qui conteste
+    targetUserId: v.id("users"), // Contre qui (propriétaire de la preuve)
+    reason: v.string(), // Raison de la contestation
+    description: v.string(), // Description détaillée
+    evidence: v.optional(v.string()), // Preuves supplémentaires (URLs)
+    status: v.string(), // "pending", "under_review", "resolved_favor_disputer", "resolved_favor_target", "dismissed"
+    resolution: v.optional(v.string()), // Explication de la résolution
+    resolvedBy: v.optional(v.id("users")), // Admin/organisateur qui a résolu
+    resolvedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_proof", ["proofId"])
+    .index("by_challenge", ["challengeId"])
+    .index("by_disputer", ["disputerId"])
+    .index("by_target", ["targetUserId"])
+    .index("by_status", ["status"]),
+
+  // Admin Audit Logs - Track all admin actions for security and compliance
+  auditLogs: defineTable({
+    adminId: v.id("users"), // Admin who performed the action
+    action: v.string(), // Action type: "resolve_dispute", "block_user", "toggle_admin", "cancel_challenge", etc.
+    targetType: v.string(), // Type of target: "user", "challenge", "dispute", "transaction"
+    targetId: v.optional(v.string()), // ID of the target (stored as string for flexibility)
+    details: v.string(), // JSON stringified details of the action
+    ipAddress: v.optional(v.string()), // IP address if available
+    userAgent: v.optional(v.string()), // User agent if available
+    result: v.string(), // "success" or "failure"
+    errorMessage: v.optional(v.string()), // Error message if failed
+    createdAt: v.number(),
+  })
+    .index("by_admin", ["adminId"])
+    .index("by_action", ["action"])
+    .index("by_target", ["targetType", "targetId"])
+    .index("by_timestamp", ["createdAt"]),
 });

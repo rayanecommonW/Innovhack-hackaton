@@ -24,6 +24,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import Animated, { FadeIn, FadeInDown, SlideInDown } from "react-native-reanimated";
+import { router } from "expo-router";
 import {
   Colors,
   Spacing,
@@ -121,6 +122,13 @@ export default function FriendsModal({
     );
   };
 
+  const handleViewFriendProfile = (friendId: string) => {
+    onClose();
+    setTimeout(() => {
+      router.push({ pathname: "/friend-profile", params: { friendId } });
+    }, 300);
+  };
+
   const handleSetUsername = async () => {
     if (!newUsername.trim()) return;
     setIsSettingUsername(true);
@@ -206,21 +214,29 @@ export default function FriendsModal({
                     <Animated.View
                       key={friend._id}
                       entering={FadeInDown.delay(200 + index * 50)}
-                      style={styles.friendCard}
                     >
-                      {renderAvatar(friend.name, friend.profileImageUrl)}
-                      <View style={styles.friendInfo}>
-                        <Text style={styles.friendName}>{friend.name}</Text>
-                        {friend.username && (
-                          <Text style={styles.friendUsername}>@{friend.username}</Text>
-                        )}
-                      </View>
                       <TouchableOpacity
-                        onPress={() => handleRemoveFriend(friend._id, friend.name)}
-                        style={styles.removeButton}
-                        activeOpacity={0.7}
+                        style={styles.friendCard}
+                        onPress={() => handleViewFriendProfile(friend._id)}
+                        activeOpacity={0.8}
                       >
-                        <Ionicons name="person-remove-outline" size={18} color={Colors.danger} />
+                        {renderAvatar(friend.name, friend.profileImageUrl)}
+                        <View style={styles.friendInfo}>
+                          <Text style={styles.friendName}>{friend.name}</Text>
+                          {friend.username && (
+                            <Text style={styles.friendUsername}>@{friend.username}</Text>
+                          )}
+                          <View style={styles.friendStats}>
+                            <Text style={styles.friendStatText}>
+                              {friend.badgeCount || 0} badge{(friend.badgeCount || 0) !== 1 ? "s" : ""}
+                            </Text>
+                            <Text style={styles.friendStatSeparator}>·</Text>
+                            <Text style={styles.friendStatText}>
+                              {friend.totalWins || 0} victoire{(friend.totalWins || 0) !== 1 ? "s" : ""}
+                            </Text>
+                          </View>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
                       </TouchableOpacity>
                     </Animated.View>
                   ))}
@@ -708,6 +724,21 @@ const styles = StyleSheet.create({
     fontWeight: "400",
     color: Colors.textTertiary,
     marginTop: 2,
+  },
+  friendStats: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  friendStatText: {
+    fontSize: 12,
+    fontWeight: "400",
+    color: Colors.textMuted,
+  },
+  friendStatSeparator: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginHorizontal: 6,
   },
   removeButton: {
     width: 36,

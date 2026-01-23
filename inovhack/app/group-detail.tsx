@@ -1,3 +1,8 @@
+/**
+ * Group Detail Screen - Clean & Modern
+ * Shows all pacts from group members with countdown timers
+ */
+
 import React, { useState } from "react";
 import {
   View,
@@ -9,11 +14,14 @@ import {
   Alert,
   Share,
   Image,
+  RefreshControl,
   Modal,
-  Dimensions,
+  TextInput,
+  Switch,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery, useMutation } from "convex/react";
@@ -26,30 +34,35 @@ import {
   Colors,
   Spacing,
   BorderRadius,
-  Typography,
   Shadows,
 } from "../constants/theme";
-
-const FREQUENCY_LABELS: Record<string, string> = {
-  daily: "Quotidien",
-  weekly: "Hebdomadaire",
-  monthly: "Mensuel",
-  yearly: "Annuel",
-};
+import { getErrorMessage } from "../utils/errorHandler";
 
 export default function GroupDetailScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const { userId } = useAuth();
-  const [activeTab, setActiveTab] = useState<"tasks" | "members">("tasks");
-  const [selectedProof, setSelectedProof] = useState<{ url: string; userName: string } | null>(null);
+  const [activeTab, setActiveTab] = useState<"pacts" | "members">("pacts");
+  const [refreshing, setRefreshing] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showCreatePactModal, setShowCreatePactModal] = useState(false);
+
+  // Create pact form state
+  const [pactTitle, setPactTitle] = useState("");
+  const [pactDescription, setPactDescription] = useState("");
+  const [pactMinBet, setPactMinBet] = useState("5"); // Mise minimum pour les autres
+  const [pactMyBet, setPactMyBet] = useState("5"); // Ma propre mise
+  const [pactDurationHours, setPactDurationHours] = useState("24");
+  const [allowMembersToJoin, setAllowMembersToJoin] = useState(true);
+  const [creating, setCreating] = useState(false);
 
   const group = useQuery(
     api.groups.getGroup,
     groupId ? { groupId: groupId as Id<"groups"> } : "skip"
   );
 
-  const tasks = useQuery(
-    api.groups.getGroupTasks,
+  // Get all pacts in this group
+  const groupPacts = useQuery(
+    api.challenges.getGroupChallenges,
     groupId ? { groupId: groupId as Id<"groups"> } : "skip"
   );
 
@@ -59,11 +72,25 @@ export default function GroupDetailScreen() {
   );
 
   const sendFriendRequest = useMutation(api.friends.sendFriendRequest);
+  const createChallenge = useMutation(api.challenges.createChallenge);
+  const leaveGroup = useMutation(api.groups.leaveGroup);
+  const removeMember = useMutation(api.groups.removeMember);
+
+  // Check if current user is admin
+  const currentUserMembership = group?.members?.find(
+    (m: any) => m.userId === userId
+  );
+  const isAdmin = currentUserMembership?.role === "admin";
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 1000);
+  };
 
   const shareInviteCode = async (code: string) => {
     try {
       await Share.share({
-        message: `Rejoins mon groupe sur PACT!\n\nCode: ${code}\n\nTélécharge l'app et entre ce code!`,
+        message: `Rejoins mon groupe "${group?.name}" sur PACT!\n\nCode: ${code}\n\nTélécharge l'app et entre ce code!`,
       });
     } catch (error) {
       // User cancelled
@@ -80,25 +107,164 @@ export default function GroupDetailScreen() {
         Alert.alert("Envoyé!", "Demande d'ami envoyée");
       }
     } catch (error: any) {
-      Alert.alert("Erreur", error.message);
+      Alert.alert("Oups!", getErrorMessage(error));
     }
   };
 
-  const handleSubmitProof = (taskId: Id<"groupTasks">) => {
+  const handleLeaveGroup = () => {
+    Alert.alert(
+      "Quitter le groupe",
+      "Es-tu sûr de vouloir quitter ce groupe ?",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Quitter",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await leaveGroup({
+                groupId: groupId as Id<"groups">,
+                userId: userId as Id<"users">,
+              });
+              Alert.alert("Fait!", "Tu as quitté le groupe");
+              router.back();
+            } catch (error: any) {
+              Alert.alert("Oups!", getErrorMessage(error));
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRemoveMember = (memberId: Id<"users">, memberName: string) => {
+    Alert.alert(
+      "Exclure le membre",
+      `Es-tu sûr de vouloir exclure ${memberName} du groupe ?`,
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Exclure",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await removeMember({
+                groupId: groupId as Id<"groups">,
+                adminId: userId as Id<"users">,
+                memberId,
+              });
+              Alert.alert("Fait!", `${memberName} a été exclu du groupe`);
+            } catch (error: any) {
+              Alert.alert("Oups!", getErrorMessage(error));
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCreatePact = () => {
+    setShowCreatePactModal(true);
+  };
+
+  const handleSubmitGroupPact = async () => {
     if (!userId || !groupId) return;
-    router.push({
-      pathname: "/submit-group-proof",
-      params: { taskId, groupId },
-    });
+
+    const title = pactTitle.trim();
+    const description = pactDescription.trim();
+    const minBet = parseFloat(pactMinBet);
+    const myBet = parseFloat(pactMyBet);
+    const duration = parseInt(pactDurationHours);
+
+    if (!title) {
+      Alert.alert("Erreur", "Donne un titre à ton pact");
+      return;
+    }
+
+    if (isNaN(minBet) || minBet < 1) {
+      Alert.alert("Erreur", "La mise minimum est de 1€");
+      return;
+    }
+
+    if (isNaN(myBet) || myBet < 1) {
+      Alert.alert("Erreur", "Ta mise doit être d'au moins 1€");
+      return;
+    }
+
+    if (myBet < minBet) {
+      Alert.alert("Erreur", "Ta mise doit être au moins égale à la mise minimum");
+      return;
+    }
+
+    if (isNaN(duration) || duration < 1) {
+      Alert.alert("Erreur", "La durée minimum est de 1 heure");
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const now = Date.now();
+      const endDate = now + duration * 60 * 60 * 1000;
+
+      await createChallenge({
+        title,
+        description: description || title,
+        category: "fitness",
+        type: "group",
+        creatorId: userId as Id<"users">,
+        groupId: groupId as Id<"groups">,
+        proofType: "photo",
+        proofDescription: "Envoie une photo comme preuve",
+        proofValidationCriteria: "La photo doit montrer la réalisation du défi",
+        minBet: minBet,
+        creatorBetAmount: myBet, // Ma propre mise
+        startDate: now,
+        endDate,
+        allowMembersToJoin,
+      });
+
+      Alert.alert("Pact créé! 🎉", "Ton pact de groupe a été créé avec succès");
+      setShowCreatePactModal(false);
+      setPactTitle("");
+      setPactDescription("");
+      setPactMinBet("5");
+      setPactMyBet("5");
+      setPactDurationHours("24");
+      setAllowMembersToJoin(true);
+    } catch (error: any) {
+      Alert.alert("Oups!", getErrorMessage(error));
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleViewPact = (challengeId: string) => {
+    router.push(`/challenge/${challengeId}`);
   };
 
   const isFriend = (memberId: string) => {
     return friends?.some((f: any) => f._id === memberId);
   };
 
+  const formatTimeRemaining = (endDate: number): string => {
+    const now = Date.now();
+    const diff = endDate - now;
+
+    if (diff <= 0) return "Terminé";
+
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+    if (hours >= 24) {
+      const days = Math.floor(hours / 24);
+      return `${days}j ${hours % 24}h`;
+    }
+    return `${hours}h ${minutes}m`;
+  };
+
   if (!groupId || group === undefined) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={Colors.accent} />
         </View>
@@ -108,65 +274,77 @@ export default function GroupDetailScreen() {
 
   if (!group) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.centered}>
           <Ionicons name="alert-circle" size={48} color={Colors.textTertiary} />
           <Text style={styles.errorText}>Groupe introuvable</Text>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Retour</Text>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Text style={styles.backBtnText}>Retour</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
+  // Include "pending" pacts as active (waiting for participants or in progress)
+  const activePacts = groupPacts?.filter((p: any) =>
+    p.status === "active" || p.status === "pending"
+  ) || [];
+  const completedPacts = groupPacts?.filter((p: any) =>
+    p.status === "completed" || p.status === "finalized"
+  ) || [];
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBackButton}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
-        <View style={styles.headerInfo}>
+        <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>{group.name}</Text>
-          <Text style={styles.headerSubtitle}>{group.members.length} membres</Text>
         </View>
         <TouchableOpacity
-          onPress={() => shareInviteCode(group.inviteCode)}
-          style={styles.headerShareButton}
+          onPress={() => setShowShareModal(true)}
+          style={styles.headerBtn}
         >
-          <Ionicons name="share-social" size={22} color={Colors.success} />
+          <Ionicons name="share-social-outline" size={22} color={Colors.accent} />
         </TouchableOpacity>
       </View>
 
-      {/* Invite Code Banner */}
-      <Animated.View entering={FadeInDown.delay(50).springify()} style={styles.inviteCodeBanner}>
-        <View>
-          <Text style={styles.inviteCodeLabel}>Code d'invitation</Text>
-          <Text style={styles.inviteCodeText}>{group.inviteCode}</Text>
+      {/* Stats Row */}
+      <Animated.View entering={FadeInDown.delay(50).duration(300)} style={styles.statsRow}>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{group.members.length}</Text>
+          <Text style={styles.statLabel}>Membres</Text>
         </View>
-        <TouchableOpacity
-          onPress={() => shareInviteCode(group.inviteCode)}
-          style={styles.shareCodeButton}
-        >
-          <Ionicons name="copy-outline" size={20} color={Colors.black} />
-          <Text style={styles.shareCodeButtonText}>Copier</Text>
-        </TouchableOpacity>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>{activePacts.length}</Text>
+          <Text style={styles.statLabel}>Pacts actifs</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={[styles.statValue, styles.statValueSuccess]}>
+            {completedPacts.length}
+          </Text>
+          <Text style={styles.statLabel}>Terminés</Text>
+        </View>
       </Animated.View>
 
       {/* Tabs */}
-      <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.tabs}>
+      <Animated.View entering={FadeInDown.delay(100).duration(300)} style={styles.tabs}>
         <TouchableOpacity
-          onPress={() => setActiveTab("tasks")}
-          style={[styles.tab, activeTab === "tasks" && styles.tabActive]}
+          onPress={() => setActiveTab("pacts")}
+          style={[styles.tab, activeTab === "pacts" && styles.tabActive]}
         >
           <Ionicons
-            name="list"
-            size={20}
-            color={activeTab === "tasks" ? Colors.textPrimary : Colors.textTertiary}
+            name="flash"
+            size={18}
+            color={activeTab === "pacts" ? Colors.accent : Colors.textTertiary}
           />
-          <Text style={[styles.tabText, activeTab === "tasks" && styles.tabTextActive]}>
-            Tâches
+          <Text style={[styles.tabText, activeTab === "pacts" && styles.tabTextActive]}>
+            Pacts
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -175,8 +353,8 @@ export default function GroupDetailScreen() {
         >
           <Ionicons
             name="people"
-            size={20}
-            color={activeTab === "members" ? Colors.textPrimary : Colors.textTertiary}
+            size={18}
+            color={activeTab === "members" ? Colors.accent : Colors.textTertiary}
           />
           <Text style={[styles.tabText, activeTab === "members" && styles.tabTextActive]}>
             Membres
@@ -188,149 +366,171 @@ export default function GroupDetailScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.accent} />
+        }
       >
-        {activeTab === "tasks" ? (
+        {activeTab === "pacts" ? (
           <>
-            {tasks === undefined ? (
-              <ActivityIndicator color={Colors.accent} style={{ padding: Spacing.xxl }} />
-            ) : tasks.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Ionicons name="checkbox-outline" size={48} color={Colors.textTertiary} />
-                <Text style={styles.emptyStateTitle}>Pas encore de tâches</Text>
-                <Text style={styles.emptyStateText}>
-                  Ajoute une tâche pour commencer à défier tes amis!
-                </Text>
-              </View>
-            ) : (
-              tasks.map((task: any, index: number) => {
-                const userProgress = task.progress.find((p: any) => p.userId === userId);
-                const isCompleted = userProgress?.completed || false;
+            {/* Create Pact Button */}
+            <Animated.View entering={FadeInDown.delay(150).duration(300)}>
+              <TouchableOpacity onPress={handleCreatePact} style={styles.createPactBtn}>
+                <View style={styles.createPactIcon}>
+                  <Ionicons name="add" size={24} color={Colors.white} />
+                </View>
+                <View style={styles.createPactContent}>
+                  <Text style={styles.createPactTitle}>Créer un pact</Text>
+                  <Text style={styles.createPactSubtitle}>Défie-toi dans ce groupe</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+              </TouchableOpacity>
+            </Animated.View>
 
-                return (
+            {/* Active Pacts */}
+            {activePacts.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Pacts en cours</Text>
+                {activePacts.map((pact: any, index: number) => {
+                  const isMyPact = pact.creatorId === userId;
+                  const hasJoined = pact.participants?.some((p: any) => p.userId === userId);
+
+                  return (
+                    <Animated.View
+                      key={pact._id}
+                      entering={FadeInUp.delay(200 + index * 50).duration(300)}
+                    >
+                      <TouchableOpacity
+                        onPress={() => handleViewPact(pact._id)}
+                        style={styles.pactCard}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.pactHeader}>
+                          <View style={styles.pactCreator}>
+                            <View style={styles.pactCreatorAvatar}>
+                              {pact.creator?.profileImageUrl ? (
+                                <Image
+                                  source={{ uri: pact.creator.profileImageUrl }}
+                                  style={styles.pactCreatorImage}
+                                />
+                              ) : (
+                                <Text style={styles.pactCreatorInitial}>
+                                  {pact.creator?.name?.charAt(0).toUpperCase() || "?"}
+                                </Text>
+                              )}
+                            </View>
+                            <View>
+                              <Text style={styles.pactCreatorName}>
+                                {isMyPact ? "Toi" : pact.creator?.name || "Utilisateur"}
+                              </Text>
+                              {isMyPact && (
+                                <View style={styles.myPactBadge}>
+                                  <Text style={styles.myPactBadgeText}>Ton pact</Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                          <View style={styles.pactTime}>
+                            <Ionicons name="time-outline" size={14} color={Colors.warning} />
+                            <Text style={styles.pactTimeText}>
+                              {formatTimeRemaining(pact.endDate)}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <Text style={styles.pactTitle}>{pact.title}</Text>
+
+                        <View style={styles.pactFooter}>
+                          <View style={styles.pactStat}>
+                            <Ionicons name="people-outline" size={16} color={Colors.textMuted} />
+                            <Text style={styles.pactStatText}>
+                              {pact.currentParticipants || 1} participant{(pact.currentParticipants || 1) > 1 ? "s" : ""}
+                            </Text>
+                          </View>
+                          <View style={styles.pactBet}>
+                            <Text style={styles.pactBetText}>{pact.minBet}€</Text>
+                          </View>
+                        </View>
+
+                        {!hasJoined && !isMyPact && (
+                          <View style={styles.joinHint}>
+                            <Text style={styles.joinHintText}>Appuie pour rejoindre</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    </Animated.View>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* Completed Pacts */}
+            {completedPacts.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Pacts terminés</Text>
+                {completedPacts.slice(0, 5).map((pact: any, index: number) => (
                   <Animated.View
-                    key={task._id}
-                    entering={FadeInUp.delay(100 + index * 60).springify()}
-                    style={styles.taskCard}
+                    key={pact._id}
+                    entering={FadeInUp.delay(300 + index * 50).duration(300)}
                   >
-                    <View style={styles.taskHeader}>
-                      <View style={styles.taskTitleRow}>
-                        <Text style={styles.taskTitle}>{task.title}</Text>
-                        <View style={styles.taskFrequencyBadge}>
-                          <Text style={styles.taskFrequencyText}>
-                            {FREQUENCY_LABELS[task.frequency]}
+                    <TouchableOpacity
+                      onPress={() => handleViewPact(pact._id)}
+                      style={[styles.pactCard, styles.pactCardCompleted]}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.pactHeader}>
+                        <View style={styles.pactCreator}>
+                          <View style={[styles.pactCreatorAvatar, styles.pactCreatorAvatarCompleted]}>
+                            <Text style={styles.pactCreatorInitial}>
+                              {pact.creator?.name?.charAt(0).toUpperCase() || "?"}
+                            </Text>
+                          </View>
+                          <Text style={styles.pactCreatorName}>
+                            {pact.creatorId === userId ? "Toi" : pact.creator?.name || "Utilisateur"}
                           </Text>
                         </View>
+                        <View style={styles.completedBadge}>
+                          <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+                        </View>
                       </View>
-                      <View style={styles.taskBetRow}>
-                        <Text style={styles.taskBetLabel}>Mise:</Text>
-                        <Text style={styles.taskBetAmount}>{task.betAmount}€</Text>
-                      </View>
-                    </View>
-
-                    {/* Progress */}
-                    <View style={styles.taskProgress}>
-                      <Text style={styles.taskProgressLabel}>PROGRESSION</Text>
-                      <View style={styles.progressGrid}>
-                        {task.progress.map((p: any) => (
-                          <TouchableOpacity
-                            key={p.userId}
-                            style={[
-                              styles.progressItem,
-                              p.completed && styles.progressItemCompleted,
-                            ]}
-                            onPress={() => p.proofUrl && setSelectedProof({ url: p.proofUrl, userName: p.userName })}
-                            activeOpacity={p.proofUrl ? 0.7 : 1}
-                          >
-                            {p.proofUrl ? (
-                              <Image
-                                source={{ uri: p.proofUrl }}
-                                style={styles.proofThumbnail}
-                              />
-                            ) : (
-                              <View
-                                style={[
-                                  styles.progressAvatar,
-                                  p.completed && styles.progressAvatarCompleted,
-                                ]}
-                              >
-                                <Text
-                                  style={[
-                                    styles.progressAvatarText,
-                                    p.completed && styles.progressAvatarTextCompleted,
-                                  ]}
-                                >
-                                  {p.userName.charAt(0).toUpperCase()}
-                                </Text>
-                              </View>
-                            )}
-                            <Text style={styles.progressName} numberOfLines={1}>
-                              {p.userName}
-                            </Text>
-                            {p.completed && (
-                              <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
-                            )}
-                            {p.proofUrl && (
-                              <Ionicons name="image" size={14} color={Colors.info} />
-                            )}
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-
-                    {/* Stats */}
-                    <View style={styles.taskStats}>
-                      <View style={styles.taskStatItem}>
-                        <Text style={styles.taskStatValue}>{task.completedCount}</Text>
-                        <Text style={styles.taskStatLabel}>Complété</Text>
-                      </View>
-                      <View style={styles.taskStatDivider} />
-                      <View style={styles.taskStatItem}>
-                        <Text style={[styles.taskStatValue, styles.taskStatValueGain]}>
-                          +{task.potentialGain}€
-                        </Text>
-                        <Text style={styles.taskStatLabel}>Gains potentiels</Text>
-                      </View>
-                    </View>
-
-                    {/* Submit Proof Button */}
-                    {!isCompleted && (
-                      <TouchableOpacity
-                        onPress={() => handleSubmitProof(task._id)}
-                        style={styles.completeButton}
-                      >
-                        <Ionicons name="camera" size={20} color={Colors.black} />
-                        <Text style={styles.completeButtonText}>Soumettre une preuve</Text>
-                      </TouchableOpacity>
-                    )}
-                    {isCompleted && (
-                      <View style={styles.completedBadge}>
-                        <Ionicons name="checkmark-circle" size={20} color={Colors.success} />
-                        <Text style={styles.completedBadgeText}>Complété aujourd'hui</Text>
-                      </View>
-                    )}
+                      <Text style={[styles.pactTitle, styles.pactTitleCompleted]}>{pact.title}</Text>
+                    </TouchableOpacity>
                   </Animated.View>
-                );
-              })
+                ))}
+              </View>
+            )}
+
+            {/* Empty State */}
+            {activePacts.length === 0 && completedPacts.length === 0 && (
+              <View style={styles.emptyState}>
+                <Ionicons name="flash-outline" size={48} color={Colors.textTertiary} />
+                <Text style={styles.emptyTitle}>Aucun pact</Text>
+                <Text style={styles.emptyText}>
+                  Crée le premier pact pour défier le groupe!
+                </Text>
+              </View>
             )}
           </>
         ) : (
-          <>
-            {/* Members Tab */}
-            <View style={styles.membersList}>
-              {group.members.map((member: any, index: number) => {
-                const isCurrentUser = member.userId === userId;
-                const isAlreadyFriend = isFriend(member.userId);
+          /* Members Tab */
+          <View style={styles.membersList}>
+            {group.members.map((member: any, index: number) => {
+              const isCurrentUser = member.userId === userId;
+              const isAlreadyFriend = isFriend(member.userId);
 
-                return (
-                  <Animated.View
-                    key={member._id}
-                    entering={FadeInUp.delay(100 + index * 60).springify()}
-                    style={styles.memberCard}
-                  >
+              return (
+                <Animated.View
+                  key={member._id}
+                  entering={FadeInUp.delay(100 + index * 50).duration(300)}
+                >
+                  <View style={styles.memberCard}>
                     <View style={styles.memberAvatar}>
-                      <Text style={styles.memberAvatarText}>
-                        {member.name.charAt(0).toUpperCase()}
-                      </Text>
+                      {member.profileImageUrl ? (
+                        <Image source={{ uri: member.profileImageUrl }} style={styles.memberAvatarImage} />
+                      ) : (
+                        <Text style={styles.memberAvatarText}>
+                          {member.name?.charAt(0).toUpperCase() || "?"}
+                        </Text>
+                      )}
                     </View>
                     <View style={styles.memberInfo}>
                       <View style={styles.memberNameRow}>
@@ -340,68 +540,234 @@ export default function GroupDetailScreen() {
                             <Text style={styles.youBadgeText}>Toi</Text>
                           </View>
                         )}
-                      </View>
-                      <View style={styles.memberRoleRow}>
                         {member.role === "admin" && (
                           <View style={styles.adminBadge}>
-                            <Ionicons name="star" size={12} color={Colors.accent} />
-                            <Text style={styles.adminBadgeText}>Admin</Text>
+                            <Ionicons name="star" size={10} color={Colors.accent} />
                           </View>
                         )}
                       </View>
                     </View>
-                    {!isCurrentUser && (
-                      isAlreadyFriend ? (
-                        <View style={styles.friendBadge}>
-                          <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
-                          <Text style={styles.friendBadgeText}>Ami</Text>
-                        </View>
-                      ) : (
+                    {/* Actions for member */}
+                    <View style={styles.memberActions}>
+                      {!isCurrentUser && (
+                        isAlreadyFriend ? (
+                          <View style={styles.friendBadge}>
+                            <Ionicons name="checkmark" size={14} color={Colors.success} />
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            onPress={() => handleAddFriend(member.userId)}
+                            style={styles.addFriendBtn}
+                          >
+                            <Ionicons name="person-add-outline" size={18} color={Colors.accent} />
+                          </TouchableOpacity>
+                        )
+                      )}
+
+                      {/* Admin can exclude non-admin members */}
+                      {isAdmin && !isCurrentUser && member.role !== "admin" && (
                         <TouchableOpacity
-                          onPress={() => handleAddFriend(member.userId)}
-                          style={styles.addFriendButton}
+                          onPress={() => handleRemoveMember(member.userId, member.name)}
+                          style={styles.excludeBtn}
                         >
-                          <Ionicons name="person-add" size={18} color={Colors.black} />
+                          <Ionicons name="remove-circle-outline" size={18} color={Colors.danger} />
                         </TouchableOpacity>
-                      )
-                    )}
-                  </Animated.View>
-                );
-              })}
-            </View>
-          </>
+                      )}
+                    </View>
+                  </View>
+                </Animated.View>
+              );
+            })}
+
+            {/* Leave Group Button */}
+            <TouchableOpacity
+              onPress={handleLeaveGroup}
+              style={styles.leaveGroupBtn}
+            >
+              <Ionicons name="exit-outline" size={20} color={Colors.danger} />
+              <Text style={styles.leaveGroupText}>Quitter le groupe</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      {/* Proof Image Modal */}
+      {/* Share Modal */}
       <Modal
-        visible={selectedProof !== null}
+        visible={showShareModal}
+        animationType="slide"
         transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedProof(null)}
+        onRequestClose={() => setShowShareModal(false)}
       >
-        <View style={styles.proofModalOverlay}>
-          <View style={styles.proofModalContent}>
-            <View style={styles.proofModalHeader}>
-              <Text style={styles.proofModalTitle}>Preuve de {selectedProof?.userName}</Text>
-              <TouchableOpacity
-                onPress={() => setSelectedProof(null)}
-                style={styles.proofModalClose}
-              >
-                <Ionicons name="close" size={24} color={Colors.textPrimary} />
-              </TouchableOpacity>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowShareModal(false)}
+        >
+          <Pressable style={styles.shareModalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.shareModalTitle}>Inviter des amis</Text>
+            <Text style={styles.shareModalSubtitle}>
+              Partage ce code pour inviter tes amis à rejoindre le groupe
+            </Text>
+
+            <View style={styles.inviteCodeBox}>
+              <Text style={styles.inviteCodeLarge}>{group.inviteCode}</Text>
             </View>
-            {selectedProof?.url && (
-              <Image
-                source={{ uri: selectedProof.url }}
-                style={styles.proofModalImage}
-                resizeMode="contain"
-              />
-            )}
-          </View>
-        </View>
+
+            <TouchableOpacity
+              onPress={() => {
+                shareInviteCode(group.inviteCode);
+                setShowShareModal(false);
+              }}
+              style={styles.shareButton}
+            >
+              <Ionicons name="share-social" size={20} color={Colors.white} />
+              <Text style={styles.shareButtonText}>Partager le code</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setShowShareModal(false)}
+              style={styles.cancelButton}
+            >
+              <Text style={styles.cancelButtonText}>Fermer</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Create Group Pact Modal */}
+      <Modal
+        visible={showCreatePactModal}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setShowCreatePactModal(false)}
+      >
+        <SafeAreaView style={styles.createPactModalContainer}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={{ flex: 1 }}
+          >
+            <View style={styles.createPactModalHeader}>
+              <TouchableOpacity
+                onPress={() => setShowCreatePactModal(false)}
+                style={styles.closeModalBtn}
+              >
+                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+              </TouchableOpacity>
+              <Text style={styles.createPactModalTitle}>Nouveau pact</Text>
+              <View style={{ width: 40 }} />
+            </View>
+
+            <ScrollView
+              style={styles.createPactScrollView}
+              contentContainerStyle={styles.createPactScrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Titre du pact</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={pactTitle}
+                  onChangeText={setPactTitle}
+                  placeholder="Ex: Faire 30 min de sport"
+                  placeholderTextColor={Colors.textMuted}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Description (optionnel)</Text>
+                <TextInput
+                  style={[styles.formInput, styles.formTextarea]}
+                  value={pactDescription}
+                  onChangeText={setPactDescription}
+                  placeholder="Détails du défi..."
+                  placeholderTextColor={Colors.textMuted}
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+
+              <View style={styles.formRow}>
+                <View style={[styles.formGroup, { flex: 1, marginRight: Spacing.sm }]}>
+                  <Text style={styles.formLabel}>Ma mise (€)</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={pactMyBet}
+                    onChangeText={setPactMyBet}
+                    keyboardType="numeric"
+                    placeholder="5"
+                    placeholderTextColor={Colors.textMuted}
+                  />
+                </View>
+
+                <View style={[styles.formGroup, { flex: 1, marginLeft: Spacing.sm }]}>
+                  <Text style={styles.formLabel}>Mise min. (autres)</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    value={pactMinBet}
+                    onChangeText={setPactMinBet}
+                    keyboardType="numeric"
+                    placeholder="5"
+                    placeholderTextColor={Colors.textMuted}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Durée (heures)</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={pactDurationHours}
+                  onChangeText={setPactDurationHours}
+                  keyboardType="numeric"
+                  placeholder="24"
+                  placeholderTextColor={Colors.textMuted}
+                />
+              </View>
+
+              <View style={styles.switchRow}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchLabel}>Autoriser les membres à rejoindre</Text>
+                  <Text style={styles.switchDescription}>
+                    Les autres membres du groupe pourront participer à ton pact
+                  </Text>
+                </View>
+                <Switch
+                  value={allowMembersToJoin}
+                  onValueChange={setAllowMembersToJoin}
+                  trackColor={{ false: Colors.border, true: Colors.accentMuted }}
+                  thumbColor={allowMembersToJoin ? Colors.accent : Colors.textMuted}
+                />
+              </View>
+
+              <View style={styles.infoBox}>
+                <Ionicons name="information-circle" size={20} color={Colors.info} />
+                <Text style={styles.infoText}>
+                  Ta preuve sera validée par les membres du groupe. Il faut plus de 50% d'approbation pour gagner.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={handleSubmitGroupPact}
+                style={[styles.createPactButton, creating && styles.createPactButtonDisabled]}
+                disabled={creating}
+              >
+                {creating ? (
+                  <ActivityIndicator color={Colors.white} />
+                ) : (
+                  <>
+                    <Ionicons name="flash" size={20} color={Colors.white} />
+                    <Text style={styles.createPactButtonText}>Créer le pact</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -420,333 +786,366 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xl,
   },
   errorText: {
-    ...Typography.bodyLarge,
+    fontSize: 16,
     color: Colors.textTertiary,
   },
-  backButton: {
-    backgroundColor: Colors.textPrimary,
+  backBtn: {
+    backgroundColor: Colors.accent,
     paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xxl,
+    paddingHorizontal: Spacing.xl,
     borderRadius: BorderRadius.full,
   },
-  backButtonText: {
-    ...Typography.labelMedium,
-    color: Colors.black,
+  backBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: Colors.white,
   },
+
   // Header
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
-  headerBackButton: {
+  headerBtn: {
     width: 44,
     height: 44,
     justifyContent: "center",
     alignItems: "center",
   },
-  headerInfo: {
+  headerCenter: {
     flex: 1,
-    marginLeft: Spacing.sm,
+    alignItems: "center",
   },
   headerTitle: {
-    ...Typography.headlineSmall,
+    fontSize: 17,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
-  headerSubtitle: {
-    ...Typography.bodySmall,
-    color: Colors.textTertiary,
-  },
-  headerShareButton: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.successMuted,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  // Invite Code Banner
-  inviteCodeBanner: {
+  inviteCodeChip: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: Colors.surfaceElevated,
-    marginHorizontal: Spacing.xl,
-    marginTop: Spacing.lg,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.xl,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  inviteCodeLabel: {
-    ...Typography.labelSmall,
-    color: Colors.textTertiary,
+    gap: 4,
+    backgroundColor: Colors.accentMuted,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+    marginTop: 2,
   },
   inviteCodeText: {
-    fontSize: 24,
+    fontSize: 11,
+    fontWeight: "600",
+    color: Colors.accent,
+    letterSpacing: 1,
+  },
+
+  // Stats
+  statsRow: {
+    flexDirection: "row",
+    backgroundColor: Colors.surface,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    ...Shadows.sm,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statValue: {
+    fontSize: 20,
     fontWeight: "700",
     color: Colors.textPrimary,
-    letterSpacing: 4,
-    marginTop: Spacing.xs,
   },
-  shareCodeButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.accent,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.full,
-    gap: Spacing.xs,
+  statValueSuccess: {
+    color: Colors.success,
   },
-  shareCodeButtonText: {
-    ...Typography.labelMedium,
-    color: Colors.black,
+  statLabel: {
+    fontSize: 11,
+    color: Colors.textTertiary,
+    marginTop: 2,
   },
+  statDivider: {
+    width: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 4,
+  },
+
   // Tabs
   tabs: {
     flexDirection: "row",
-    marginHorizontal: Spacing.xl,
-    marginTop: Spacing.lg,
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.xs,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.md,
+    backgroundColor: Colors.surfaceHighlight,
+    borderRadius: BorderRadius.md,
+    padding: 4,
   },
   tab: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.sm,
     gap: Spacing.xs,
   },
   tabActive: {
-    backgroundColor: Colors.surfaceHighlight,
+    backgroundColor: Colors.surface,
+    ...Shadows.xs,
   },
   tabText: {
-    ...Typography.labelMedium,
+    fontSize: 14,
+    fontWeight: "500",
     color: Colors.textTertiary,
   },
   tabTextActive: {
-    color: Colors.textPrimary,
+    color: Colors.accent,
+    fontWeight: "600",
   },
+
   // Scroll
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
   },
+
+  // Create Pact Button
+  createPactBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    gap: Spacing.md,
+    ...Shadows.sm,
+    borderWidth: 1,
+    borderColor: Colors.accentMuted,
+    borderStyle: "dashed",
+  },
+  createPactIcon: {
+    width: 44,
+    height: 44,
+    backgroundColor: Colors.accent,
+    borderRadius: BorderRadius.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  createPactContent: {
+    flex: 1,
+  },
+  createPactTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+  },
+  createPactSubtitle: {
+    fontSize: 12,
+    color: Colors.textTertiary,
+    marginTop: 2,
+  },
+
+  // Section
+  section: {
+    marginTop: Spacing.xl,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: Spacing.md,
+  },
+
+  // Pact Card
+  pactCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.sm,
+    ...Shadows.sm,
+  },
+  pactCardCompleted: {
+    opacity: 0.7,
+  },
+  pactHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+  },
+  pactCreator: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  pactCreatorAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.accentMuted,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  pactCreatorAvatarCompleted: {
+    backgroundColor: Colors.surfaceHighlight,
+  },
+  pactCreatorImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+  },
+  pactCreatorInitial: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.accent,
+  },
+  pactCreatorName: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: Colors.textSecondary,
+  },
+  myPactBadge: {
+    backgroundColor: Colors.accentMuted,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: BorderRadius.sm,
+    marginTop: 2,
+  },
+  myPactBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: Colors.accent,
+  },
+  pactTime: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: Colors.warningMuted,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  pactTimeText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.warning,
+  },
+  completedBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.successMuted,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pactTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+    marginBottom: Spacing.sm,
+  },
+  pactTitleCompleted: {
+    color: Colors.textSecondary,
+  },
+  pactFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  pactStat: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  pactStatText: {
+    fontSize: 13,
+    color: Colors.textTertiary,
+  },
+  pactBet: {
+    backgroundColor: Colors.successMuted,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  pactBetText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: Colors.success,
+  },
+  joinHint: {
+    backgroundColor: Colors.accentMuted,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.sm,
+    marginTop: Spacing.sm,
+    alignItems: "center",
+  },
+  joinHintText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: Colors.accent,
+  },
+
   // Empty
   emptyState: {
     alignItems: "center",
-    paddingVertical: Spacing.huge,
+    paddingVertical: Spacing.xxl,
     gap: Spacing.md,
   },
-  emptyStateTitle: {
-    ...Typography.headlineSmall,
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
-  emptyStateText: {
-    ...Typography.bodyMedium,
+  emptyText: {
+    fontSize: 14,
     color: Colors.textTertiary,
     textAlign: "center",
   },
-  // Task Card
-  taskCard: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.xl,
-    marginBottom: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadows.sm,
-  },
-  taskHeader: {
-    marginBottom: Spacing.lg,
-  },
-  taskTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing.sm,
-  },
-  taskTitle: {
-    ...Typography.headlineSmall,
-    color: Colors.textPrimary,
-    flex: 1,
-  },
-  taskFrequencyBadge: {
-    backgroundColor: Colors.surfaceHighlight,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-  },
-  taskFrequencyText: {
-    ...Typography.labelSmall,
-    color: Colors.textSecondary,
-  },
-  taskBetRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  taskBetLabel: {
-    ...Typography.bodySmall,
-    color: Colors.textTertiary,
-  },
-  taskBetAmount: {
-    ...Typography.labelLarge,
-    color: Colors.success,
-  },
-  // Progress
-  taskProgress: {
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  taskProgressLabel: {
-    ...Typography.labelSmall,
-    color: Colors.textTertiary,
-    letterSpacing: 1,
-    marginBottom: Spacing.md,
-  },
-  progressGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.md,
-  },
-  progressItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.surfaceElevated,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderRadius: BorderRadius.full,
-    gap: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  progressItemCompleted: {
-    backgroundColor: Colors.successMuted,
-    borderColor: Colors.success,
-  },
-  progressAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.surfaceHighlight,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  progressAvatarCompleted: {
-    backgroundColor: Colors.success,
-  },
-  progressAvatarText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: Colors.textPrimary,
-  },
-  progressAvatarTextCompleted: {
-    color: Colors.black,
-  },
-  progressName: {
-    ...Typography.labelSmall,
-    color: Colors.textPrimary,
-    maxWidth: 80,
-  },
-  // Stats
-  taskStats: {
-    flexDirection: "row",
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.lg,
-  },
-  taskStatItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  taskStatValue: {
-    ...Typography.headlineSmall,
-    color: Colors.textPrimary,
-  },
-  taskStatValueGain: {
-    color: Colors.success,
-  },
-  taskStatLabel: {
-    ...Typography.bodySmall,
-    color: Colors.textTertiary,
-    marginTop: Spacing.xs,
-  },
-  taskStatDivider: {
-    width: 1,
-    backgroundColor: Colors.border,
-  },
-  // Complete Button
-  completeButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.success,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    gap: Spacing.sm,
-  },
-  completeButtonText: {
-    ...Typography.labelLarge,
-    color: Colors.black,
-  },
-  completedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.successMuted,
-    paddingVertical: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    gap: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.success,
-  },
-  completedBadgeText: {
-    ...Typography.labelMedium,
-    color: Colors.success,
-  },
+
   // Members
   membersList: {
-    gap: Spacing.md,
+    gap: Spacing.sm,
   },
   memberCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    gap: Spacing.md,
     ...Shadows.sm,
   },
   memberAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.surfaceHighlight,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.accentMuted,
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden",
+  },
+  memberAvatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   memberAvatarText: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.accent,
   },
   memberInfo: {
     flex: 1,
-    marginLeft: Spacing.md,
   },
   memberNameRow: {
     flexDirection: "row",
@@ -754,104 +1153,271 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   memberName: {
-    ...Typography.labelLarge,
+    fontSize: 15,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
   youBadge: {
-    backgroundColor: Colors.accent,
-    paddingHorizontal: Spacing.sm,
+    backgroundColor: Colors.accentMuted,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: BorderRadius.sm,
   },
   youBadgeText: {
-    ...Typography.labelSmall,
-    color: Colors.black,
     fontSize: 10,
-  },
-  memberRoleRow: {
-    marginTop: Spacing.xs,
+    fontWeight: "600",
+    color: Colors.accent,
   },
   adminBadge: {
-    flexDirection: "row",
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.warningMuted,
+    justifyContent: "center",
     alignItems: "center",
-    backgroundColor: Colors.surfaceHighlight,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
-    gap: Spacing.xs,
-    alignSelf: "flex-start",
-  },
-  adminBadgeText: {
-    ...Typography.labelSmall,
-    color: Colors.accent,
-    fontSize: 10,
   },
   friendBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.successMuted,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  addFriendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.accentMuted,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  memberActions: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: Colors.successMuted,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-    gap: Spacing.xs,
+    gap: Spacing.sm,
   },
-  friendBadgeText: {
-    ...Typography.labelSmall,
-    color: Colors.success,
-  },
-  addFriendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.accent,
+  excludeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.dangerMuted,
     justifyContent: "center",
     alignItems: "center",
   },
+  leaveGroupBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    marginTop: Spacing.xl,
+    paddingVertical: Spacing.md,
+    backgroundColor: Colors.dangerMuted,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.danger,
+  },
+  leaveGroupText: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: Colors.danger,
+  },
+
   bottomSpacer: {
-    height: 120,
+    height: 100,
   },
-  // Proof styles
-  proofThumbnail: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.surfaceHighlight,
-  },
-  // Proof Modal
-  proofModalOverlay: {
+
+  // Modal Styles
+  modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.9)",
-    justifyContent: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalKeyboard: {
+    width: "100%",
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: Colors.border,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: Spacing.lg,
+  },
+
+  // Share Modal
+  shareModalContent: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    paddingBottom: 40,
     alignItems: "center",
   },
-  proofModalContent: {
-    width: SCREEN_WIDTH - Spacing.xxl * 2,
-    maxHeight: "80%",
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: BorderRadius.xl,
-    overflow: "hidden",
+  shareModalTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+    marginBottom: Spacing.xs,
   },
-  proofModalHeader: {
+  shareModalSubtitle: {
+    fontSize: 14,
+    color: Colors.textTertiary,
+    textAlign: "center",
+    marginBottom: Spacing.xl,
+  },
+  inviteCodeBox: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.xl,
+    marginBottom: Spacing.lg,
+    borderWidth: 2,
+    borderColor: Colors.accentMuted,
+    borderStyle: "dashed",
+  },
+  inviteCodeLarge: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: Colors.accent,
+    letterSpacing: 4,
+  },
+  shareButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.accent,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: BorderRadius.full,
+    gap: Spacing.sm,
+    width: "100%",
+    marginBottom: Spacing.md,
+  },
+  shareButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.white,
+  },
+  cancelButton: {
+    paddingVertical: Spacing.md,
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: Colors.textTertiary,
+  },
+
+  // Create Pact Modal
+  createPactModalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  createPactModalHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  proofModalTitle: {
-    ...Typography.labelLarge,
+  createPactModalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
     color: Colors.textPrimary,
   },
-  proofModalClose: {
+  closeModalBtn: {
     width: 40,
     height: 40,
     justifyContent: "center",
     alignItems: "center",
   },
-  proofModalImage: {
-    width: "100%",
-    height: 400,
+  createPactScrollView: {
+    flex: 1,
+  },
+  createPactScrollContent: {
+    padding: Spacing.lg,
+  },
+  formGroup: {
+    marginBottom: Spacing.md,
+  },
+  formLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
+  },
+  formInput: {
     backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    fontSize: 16,
+    color: Colors.textPrimary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  formTextarea: {
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  formRow: {
+    flexDirection: "row",
+    marginBottom: Spacing.md,
+  },
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  switchInfo: {
+    flex: 1,
+    marginRight: Spacing.md,
+  },
+  switchLabel: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: Colors.textPrimary,
+    marginBottom: 2,
+  },
+  switchDescription: {
+    fontSize: 12,
+    color: Colors.textTertiary,
+  },
+  infoBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: Colors.infoMuted,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.info,
+    lineHeight: 18,
+  },
+  createPactButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.accent,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    gap: Spacing.sm,
+    marginBottom: Spacing.xl,
+  },
+  createPactButtonDisabled: {
+    opacity: 0.6,
+  },
+  createPactButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.white,
   },
 });

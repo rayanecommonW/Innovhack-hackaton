@@ -20,6 +20,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Id } from "../convex/_generated/dataModel";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
+import { proofCaptureService, ProofMetadata } from "../services/proofCapture";
+import { fitnessService, UnifiedFitnessService } from "../services/fitness";
 import Animated, {
   FadeInDown,
   useSharedValue,
@@ -35,15 +37,24 @@ import {
   Typography,
 } from "../constants/theme";
 import ConfettiCelebration, { ConfettiRef } from "../components/ConfettiCelebration";
+import { getErrorMessage } from "../utils/errorHandler";
 
 type ValidationState = "idle" | "uploading" | "validating" | "approved" | "rejected";
 type FileType = "image" | "pdf" | "document" | null;
+type CaptureMethod = "camera" | "gallery" | "document" | "fitness_api";
 
 interface SelectedFile {
   uri: string;
   name: string;
   type: FileType;
   mimeType?: string;
+  base64?: string;
+}
+
+interface VerificationInfo {
+  score: number;
+  confidence: "high" | "medium" | "low" | "suspicious";
+  issues: string[];
 }
 
 export default function SubmitProofScreen() {
@@ -73,8 +84,39 @@ export default function SubmitProofScreen() {
   const [validationState, setValidationState] = useState<ValidationState>("idle");
   const [validationResult, setValidationResult] = useState<{ approved: boolean; comment: string } | null>(null);
 
+  // Proof verification states
+  const [captureMethod, setCaptureMethod] = useState<CaptureMethod | null>(null);
+  const [proofMetadata, setProofMetadata] = useState<ProofMetadata | null>(null);
+  const [includeLocation, setIncludeLocation] = useState(true);
+  const [verificationInfo, setVerificationInfo] = useState<VerificationInfo | null>(null);
+  const [fitnessAvailable, setFitnessAvailable] = useState(false);
+  const [fitnessConnected, setFitnessConnected] = useState(false);
+
   const rotation = useSharedValue(0);
   const confettiRef = useRef<ConfettiRef>(null);
+
+  // Check fitness availability for fitness challenges
+  useEffect(() => {
+    const checkFitness = async () => {
+      if (challenge?.category) {
+        const fitnessType = UnifiedFitnessService.mapChallengeToFitnessType(
+          challenge.category,
+          challenge.goalUnit
+        );
+        if (fitnessType) {
+          const status = fitnessService.getConnectionStatus();
+          setFitnessAvailable(status.isAvailable);
+          setFitnessConnected(status.isConnected);
+        }
+      }
+    };
+    checkFitness();
+  }, [challenge]);
+
+  // Request location permission on mount
+  useEffect(() => {
+    proofCaptureService.requestLocationPermission();
+  }, []);
 
   useEffect(() => {
     if (validationState === "validating" || validationState === "uploading") {
@@ -106,37 +148,49 @@ export default function SubmitProofScreen() {
     return true;
   };
 
-  // Take photo with camera
+  // Take photo with camera - uses proof capture service for verification metadata
   const handleCamera = async () => {
-    const hasPermission = await requestPermissions();
-    if (!hasPermission) return;
+    // Use the proof capture service for verified photo capture
+    const result = await proofCaptureService.captureProofPhoto(includeLocation);
 
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.8,
-      allowsEditing: true,
-    });
+    if (!result.success) {
+      if (result.error && result.error !== "Capture annulée") {
+        Alert.alert("Erreur", result.error);
+      }
+      return;
+    }
 
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
+    if (result.uri && result.metadata) {
       setSelectedFile({
-        uri: asset.uri,
-        name: `photo_${Date.now()}.jpg`,
+        uri: result.uri,
+        name: `proof_${Date.now()}.jpg`,
         type: "image",
         mimeType: "image/jpeg",
+        base64: result.base64,
+      });
+      setProofMetadata(result.metadata);
+      setCaptureMethod("camera");
+
+      // Generate verification report
+      const report = proofCaptureService.generateProofReport(result.metadata);
+      setVerificationInfo({
+        score: result.metadata.captureMethod === "camera" && result.metadata.imageHash ? 100 : 70,
+        confidence: result.metadata.captureMethod === "camera" ? "high" : "medium",
+        issues: [],
       });
     }
   };
 
-  // Pick from gallery
+  // Pick from gallery - lower verification score
   const handleGallery = async () => {
     const hasPermission = await requestPermissions();
     if (!hasPermission) return;
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: "images",
       quality: 0.8,
-      allowsEditing: true,
+      allowsEditing: false,
+      base64: true,
     });
 
     if (!result.canceled && result.assets[0]) {
@@ -146,6 +200,20 @@ export default function SubmitProofScreen() {
         name: asset.fileName || `image_${Date.now()}.jpg`,
         type: "image",
         mimeType: asset.mimeType || "image/jpeg",
+        base64: asset.base64 || undefined,
+      });
+      setCaptureMethod("gallery");
+      setProofMetadata({
+        capturedAt: Date.now(),
+        deviceTime: Date.now(),
+        platform: Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "other",
+        captureMethod: "gallery",
+      });
+      // Gallery photos have lower confidence
+      setVerificationInfo({
+        score: 60,
+        confidence: "medium",
+        issues: ["Photo importée depuis la galerie (non vérifiable en temps réel)"],
       });
     }
   };
@@ -167,9 +235,98 @@ export default function SubmitProofScreen() {
           type: isPdf ? "pdf" : "image",
           mimeType: asset.mimeType,
         });
+        setCaptureMethod("document");
+        setProofMetadata({
+          capturedAt: Date.now(),
+          deviceTime: Date.now(),
+          platform: Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "other",
+          captureMethod: "gallery",
+        });
+        // Documents have lower verification score
+        setVerificationInfo({
+          score: 50,
+          confidence: "low",
+          issues: ["Document importé (authenticité non vérifiable automatiquement)"],
+        });
       }
     } catch (err) {
       Alert.alert("Erreur", "Impossible de sélectionner le fichier");
+    }
+  };
+
+  // Handle fitness API verification (for fitness challenges)
+  const handleFitnessVerification = async () => {
+    if (!challenge || !participation) return;
+
+    const fitnessType = UnifiedFitnessService.mapChallengeToFitnessType(
+      challenge.category,
+      challenge.goalUnit
+    );
+
+    if (!fitnessType) {
+      Alert.alert("Erreur", "Ce type de défi ne supporte pas la vérification automatique");
+      return;
+    }
+
+    // Request authorization if not connected
+    if (!fitnessConnected) {
+      const authorized = await fitnessService.requestAuthorization([fitnessType]);
+      if (!authorized) {
+        Alert.alert(
+          "Autorisation requise",
+          "Autorise l'accès aux données de santé pour la vérification automatique"
+        );
+        return;
+      }
+      setFitnessConnected(true);
+    }
+
+    setValidationState("validating");
+
+    try {
+      const targetValue = challenge.goalValue || 0;
+      const startDate = new Date(challenge.startDate);
+      const endDate = new Date(challenge.endDate);
+
+      const result = await fitnessService.verifyGoal(
+        fitnessType,
+        targetValue,
+        startDate,
+        endDate
+      );
+
+      if (result.success) {
+        // Auto-submit with fitness data
+        setCaptureMethod("fitness_api");
+        setProofValue(result.actualValue.toString());
+        setProofContent(
+          `Vérification automatique ${result.source}:\n` +
+          `${result.actualValue} ${result.unit} / ${targetValue} ${result.unit}\n` +
+          `Progression: ${result.percentage}%`
+        );
+        setVerificationInfo({
+          score: result.achieved ? 95 : 50,
+          confidence: result.achieved ? "high" : "medium",
+          issues: result.achieved ? [] : ["Objectif non atteint"],
+        });
+
+        if (result.achieved) {
+          // Submit automatically if goal achieved
+          await handleSubmit();
+        } else {
+          setValidationState("idle");
+          Alert.alert(
+            "Objectif non atteint",
+            `Tu as fait ${result.actualValue} ${result.unit} sur ${targetValue} ${result.unit} requis (${result.percentage}%)`
+          );
+        }
+      } else {
+        setValidationState("idle");
+        Alert.alert("Erreur", result.error || "Impossible de vérifier les données fitness");
+      }
+    } catch (err: any) {
+      setValidationState("idle");
+      Alert.alert("Oups!", getErrorMessage(err));
     }
   };
 
@@ -246,12 +403,37 @@ export default function SubmitProofScreen() {
       setValidationState(res.validation.approved ? "approved" : "rejected");
     } catch (err: any) {
       setValidationState("idle");
-      Alert.alert("Erreur", err.message || "Erreur lors de la soumission");
+      Alert.alert("Oups!", getErrorMessage(err));
     }
   };
 
   const clearFile = () => {
     setSelectedFile(null);
+    setProofMetadata(null);
+    setCaptureMethod(null);
+    setVerificationInfo(null);
+  };
+
+  // Get verification badge color
+  const getVerificationColor = (confidence: string) => {
+    switch (confidence) {
+      case "high": return Colors.success;
+      case "medium": return Colors.warning;
+      case "low": return "#FF9500";
+      case "suspicious": return Colors.danger;
+      default: return Colors.textTertiary;
+    }
+  };
+
+  // Get verification badge text
+  const getVerificationText = (confidence: string) => {
+    switch (confidence) {
+      case "high": return "Confiance élevée";
+      case "medium": return "Confiance moyenne";
+      case "low": return "Confiance faible";
+      case "suspicious": return "Suspect";
+      default: return "Non vérifié";
+    }
   };
 
   if (!challenge || !participation) {
@@ -283,21 +465,22 @@ export default function SubmitProofScreen() {
     );
   }
 
-  // Result State
+  // Result State - Always show pending for organizer validation
   if (validationState === "approved" || validationState === "rejected") {
-    const isApproved = validationResult?.approved;
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
           <Ionicons
-            name={isApproved ? "checkmark-circle" : "close-circle"}
+            name="checkmark-circle"
             size={64}
-            color={isApproved ? Colors.success : Colors.danger}
+            color={Colors.success}
           />
-          <Text style={[styles.resultTitle, { color: isApproved ? Colors.success : Colors.danger }]}>
-            {isApproved ? "Validé" : "Rejeté"}
+          <Text style={[styles.resultTitle, { color: Colors.success }]}>
+            Preuve envoyée !
           </Text>
-          <Text style={styles.resultComment}>{validationResult?.comment}</Text>
+          <Text style={styles.resultComment}>
+            L'organisateur du pact va vérifier ta preuve. Tu seras notifié du résultat.
+          </Text>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButtonLarge}>
             <Text style={styles.backButtonText}>Retour</Text>
           </TouchableOpacity>
@@ -308,20 +491,93 @@ export default function SubmitProofScreen() {
 
   // Existing Proof State
   if (existingProof) {
-    const isApproved = existingProof.aiValidation === "approved";
-    const isPending = existingProof.aiValidation === "pending";
+    const organizerStatus = existingProof.organizerValidation;
+    const isApproved = organizerStatus === "approved";
+    const isRejected = organizerStatus === "rejected";
+    const isPending = !organizerStatus || organizerStatus === "pending";
+
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
           <Ionicons
-            name={isApproved ? "checkmark-circle" : isPending ? "time" : "close-circle"}
+            name={isApproved ? "checkmark-circle" : isRejected ? "close-circle" : "time"}
             size={64}
-            color={isApproved ? Colors.success : isPending ? Colors.warning : Colors.danger}
+            color={isApproved ? Colors.success : isRejected ? Colors.danger : Colors.warning}
           />
-          <Text style={[styles.resultTitle, { color: isApproved ? Colors.success : isPending ? Colors.warning : Colors.danger }]}>
-            {isApproved ? "Validé" : isPending ? "En attente" : "Rejeté"}
+          <Text style={[styles.resultTitle, { color: isApproved ? Colors.success : isRejected ? Colors.danger : Colors.warning }]}>
+            {isApproved ? "Preuve validée !" : isRejected ? "Preuve refusée" : "En attente de validation"}
           </Text>
-          <Text style={styles.resultComment}>{existingProof.aiComment}</Text>
+          <Text style={styles.resultComment}>
+            {isApproved
+              ? "Félicitations ! L'organisateur a validé ta preuve."
+              : isRejected
+              ? existingProof.organizerComment || "L'organisateur n'a pas validé ta preuve."
+              : "L'organisateur va vérifier ta preuve. Tu seras notifié du résultat."}
+          </Text>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButtonLarge}>
+            <Text style={styles.backButtonText}>Retour</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Check if pact is long-term and hasn't ended yet
+  const now = Date.now();
+  const pactDuration = challenge.endDate - challenge.startDate;
+  const isLongTermPact = pactDuration > 24 * 60 * 60 * 1000; // Plus de 24h
+  const proofDeadline = challenge.endDate + 24 * 60 * 60 * 1000; // 24h grace period
+
+  // Long-term pact not yet ended - show waiting screen
+  if (isLongTermPact && now < challenge.endDate) {
+    const timeRemaining = challenge.endDate - now;
+    const hoursRemaining = Math.ceil(timeRemaining / (1000 * 60 * 60));
+    const daysRemaining = Math.ceil(hoursRemaining / 24);
+
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <Ionicons name="time-outline" size={64} color={Colors.warning} />
+          <Text style={[styles.resultTitle, { color: Colors.warning }]}>
+            Pas encore !
+          </Text>
+          <Text style={styles.resultComment}>
+            Ce pact se termine {daysRemaining > 1 ? `dans ${daysRemaining} jours` : `dans ${hoursRemaining}h`}.
+            {"\n\n"}Tu pourras soumettre ta preuve une fois le pact terminé.
+            {"\n"}Tu auras ensuite 24h pour envoyer ta preuve.
+          </Text>
+          <View style={styles.infoBoxCentered}>
+            <Ionicons name="information-circle" size={20} color={Colors.info} />
+            <Text style={styles.infoTextCentered}>
+              Fin du pact: {new Date(challenge.endDate).toLocaleDateString("fr-FR", {
+                day: "numeric",
+                month: "long",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </Text>
+          </View>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButtonLarge}>
+            <Text style={styles.backButtonText}>Retour</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Deadline passed
+  if (now > proofDeadline) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <Ionicons name="close-circle-outline" size={64} color={Colors.danger} />
+          <Text style={[styles.resultTitle, { color: Colors.danger }]}>
+            Délai dépassé
+          </Text>
+          <Text style={styles.resultComment}>
+            Le délai de soumission est dépassé.
+            {"\n"}Tu avais 24h après la fin du pact pour envoyer ta preuve.
+          </Text>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButtonLarge}>
             <Text style={styles.backButtonText}>Retour</Text>
           </TouchableOpacity>
@@ -357,28 +613,118 @@ export default function SubmitProofScreen() {
           <Text style={styles.challengeProof}>{challenge.proofDescription}</Text>
         </Animated.View>
 
+        {/* Fitness API Button (for eligible challenges) */}
+        {fitnessAvailable && (
+          <Animated.View entering={FadeInDown.delay(115).springify()} style={styles.fitnessSection}>
+            <TouchableOpacity
+              onPress={handleFitnessVerification}
+              style={styles.fitnessButton}
+            >
+              <View style={styles.fitnessButtonContent}>
+                <Ionicons
+                  name={Platform.OS === "ios" ? "heart" : "fitness"}
+                  size={24}
+                  color={Colors.success}
+                />
+                <View style={styles.fitnessButtonText}>
+                  <Text style={styles.fitnessButtonTitle}>
+                    Vérification automatique
+                  </Text>
+                  <Text style={styles.fitnessButtonSubtitle}>
+                    {Platform.OS === "ios" ? "Via Apple Santé" : "Via Google Fit"}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.recommendedBadge}>
+                <Text style={styles.recommendedBadgeText}>Recommandé</Text>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
+
         {/* Upload Options */}
         <Animated.View entering={FadeInDown.delay(130).springify()} style={styles.uploadSection}>
-          <Text style={styles.inputLabel}>PREUVE</Text>
+          <Text style={styles.inputLabel}>PREUVE PHOTO</Text>
 
           {/* File Preview */}
           {selectedFile ? (
-            <View style={styles.previewContainer}>
-              {selectedFile.type === "image" ? (
-                <Image source={{ uri: selectedFile.uri }} style={styles.imagePreview} />
-              ) : (
-                <View style={styles.pdfPreview}>
-                  <Ionicons name="document-text" size={48} color={Colors.accent} />
-                  <Text style={styles.pdfName} numberOfLines={1}>{selectedFile.name}</Text>
+            <View>
+              <View style={styles.previewContainer}>
+                {selectedFile.type === "image" ? (
+                  <Image source={{ uri: selectedFile.uri }} style={styles.imagePreview} />
+                ) : (
+                  <View style={styles.pdfPreview}>
+                    <Ionicons name="document-text" size={48} color={Colors.accent} />
+                    <Text style={styles.pdfName} numberOfLines={1}>{selectedFile.name}</Text>
+                  </View>
+                )}
+                <TouchableOpacity onPress={clearFile} style={styles.clearFileButton}>
+                  <Ionicons name="close" size={20} color={Colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Verification Info Badge */}
+              {verificationInfo && (
+                <View style={styles.verificationBadge}>
+                  <View style={[
+                    styles.verificationDot,
+                    { backgroundColor: getVerificationColor(verificationInfo.confidence) }
+                  ]} />
+                  <Text style={styles.verificationText}>
+                    {getVerificationText(verificationInfo.confidence)}
+                  </Text>
+                  <Text style={styles.verificationScore}>
+                    Score: {verificationInfo.score}/100
+                  </Text>
                 </View>
               )}
-              <TouchableOpacity onPress={clearFile} style={styles.clearFileButton}>
-                <Ionicons name="close" size={20} color={Colors.textPrimary} />
-              </TouchableOpacity>
+
+              {/* Metadata Info */}
+              {proofMetadata && captureMethod === "camera" && (
+                <View style={styles.metadataInfo}>
+                  <View style={styles.metadataRow}>
+                    <Ionicons name="time-outline" size={14} color={Colors.textTertiary} />
+                    <Text style={styles.metadataText}>
+                      {new Date(proofMetadata.capturedAt).toLocaleString("fr-FR")}
+                    </Text>
+                  </View>
+                  {proofMetadata.location && (
+                    <View style={styles.metadataRow}>
+                      <Ionicons name="location-outline" size={14} color={Colors.textTertiary} />
+                      <Text style={styles.metadataText}>
+                        Géolocalisé (±{Math.round(proofMetadata.location.accuracy)}m)
+                      </Text>
+                    </View>
+                  )}
+                  {proofMetadata.imageHash && (
+                    <View style={styles.metadataRow}>
+                      <Ionicons name="shield-checkmark-outline" size={14} color={Colors.success} />
+                      <Text style={styles.metadataText}>
+                        Intégrité vérifiée
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Warning for non-camera captures */}
+              {verificationInfo && verificationInfo.issues.length > 0 && (
+                <View style={styles.warningBox}>
+                  {verificationInfo.issues.map((issue, index) => (
+                    <View key={index} style={styles.warningRow}>
+                      <Ionicons name="warning-outline" size={14} color={Colors.warning} />
+                      <Text style={styles.warningText}>{issue}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           ) : (
             <View style={styles.uploadButtons}>
-              <TouchableOpacity onPress={handleCamera} style={styles.uploadButton}>
+              <TouchableOpacity onPress={handleCamera} style={[styles.uploadButton, styles.uploadButtonRecommended]}>
+                <View style={styles.recommendedBadgeSmall}>
+                  <Text style={styles.recommendedBadgeSmallText}>Meilleur score</Text>
+                </View>
                 <Ionicons name="camera" size={28} color={Colors.textPrimary} />
                 <Text style={styles.uploadButtonText}>Caméra</Text>
               </TouchableOpacity>
@@ -505,6 +851,20 @@ const styles = StyleSheet.create({
   backButtonText: {
     ...Typography.labelMedium,
     color: Colors.textPrimary,
+  },
+  infoBoxCentered: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.infoMuted,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    gap: Spacing.sm,
+    marginTop: Spacing.lg,
+  },
+  infoTextCentered: {
+    ...Typography.bodyMedium,
+    color: Colors.info,
   },
   scrollView: {
     flex: 1,
@@ -654,15 +1014,129 @@ const styles = StyleSheet.create({
   submitButton: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: Colors.textPrimary,
+    backgroundColor: Colors.accent,
     paddingVertical: Spacing.lg,
     borderRadius: BorderRadius.lg,
   },
   submitButtonText: {
     ...Typography.labelLarge,
-    color: Colors.black,
+    color: Colors.white,
   },
   bottomSpacer: {
     height: 40,
+  },
+  // New verification styles
+  fitnessSection: {
+    marginBottom: Spacing.lg,
+  },
+  fitnessButton: {
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: Colors.success,
+  },
+  fitnessButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  fitnessButtonText: {
+    gap: 2,
+  },
+  fitnessButtonTitle: {
+    ...Typography.labelMedium,
+    color: Colors.textPrimary,
+  },
+  fitnessButtonSubtitle: {
+    ...Typography.bodySmall,
+    color: Colors.textTertiary,
+  },
+  recommendedBadge: {
+    backgroundColor: Colors.success + "20",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+  },
+  recommendedBadgeText: {
+    ...Typography.labelSmall,
+    color: Colors.success,
+    fontSize: 10,
+  },
+    verificationBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: BorderRadius.md,
+  },
+  verificationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  verificationText: {
+    ...Typography.bodySmall,
+    color: Colors.textSecondary,
+    flex: 1,
+  },
+  verificationScore: {
+    ...Typography.labelSmall,
+    color: Colors.textTertiary,
+  },
+  metadataInfo: {
+    marginTop: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  metadataRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  metadataText: {
+    ...Typography.bodySmall,
+    color: Colors.textTertiary,
+    fontSize: 12,
+  },
+  warningBox: {
+    marginTop: Spacing.md,
+    backgroundColor: Colors.warning + "15",
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    gap: Spacing.xs,
+  },
+  warningRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  warningText: {
+    ...Typography.bodySmall,
+    color: Colors.warning,
+    flex: 1,
+  },
+  uploadButtonRecommended: {
+    borderColor: Colors.success,
+    borderWidth: 1,
+  },
+  recommendedBadgeSmall: {
+    position: "absolute",
+    top: -8,
+    backgroundColor: Colors.success,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.sm,
+  },
+  recommendedBadgeSmallText: {
+    ...Typography.labelSmall,
+    color: Colors.background,
+    fontSize: 9,
   },
 });

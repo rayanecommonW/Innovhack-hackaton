@@ -17,6 +17,20 @@ crons.interval(
   internal.notifications.createDeadlineReminders
 );
 
+// Envoyer les rappels de demandes d'ami - toutes les 6 heures
+crons.interval(
+  "friend-request-reminders",
+  { hours: 6 },
+  internal.notifications.createFriendRequestReminders
+);
+
+// Envoyer les rappels de preuves à valider - toutes les 4 heures
+crons.interval(
+  "proof-validation-reminders",
+  { hours: 4 },
+  internal.notifications.createProofValidationReminders
+);
+
 // Nettoyer les anciennes notifications (plus de 30 jours) - une fois par jour
 crons.daily(
   "cleanup-old-notifications",
@@ -29,6 +43,13 @@ crons.interval(
   "update-leaderboard",
   { hours: 1 },
   internal.stats.updateLeaderboard
+);
+
+// Seed badges si la table est vide - toutes les heures (idempotent)
+crons.interval(
+  "seed-badges",
+  { hours: 1 },
+  internal.badges.seedBadgesInternal
 );
 
 export default crons;

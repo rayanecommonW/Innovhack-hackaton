@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { verifyAuthenticatedUser } from "./authHelper";
 
 // Search users by username
 export const searchUsers = query({
@@ -91,20 +92,90 @@ export const getFriends = query({
     // Remove duplicates
     const uniqueFriendIds = [...new Set(friendIds.map((id) => id.toString()))];
 
-    // Get user details for each friend
+    // Get user details for each friend with more info
     const friends = await Promise.all(
       uniqueFriendIds.map(async (friendId) => {
         const user = await ctx.db.get(friendId as any);
         if (!user) return null;
+
+        // Get badge count
+        const userBadges = await ctx.db
+          .query("userBadges")
+          .withIndex("by_user", (q) => q.eq("userId", friendId as any))
+          .collect();
+
         return {
           _id: user._id,
           name: user.name,
           username: user.username,
+          profileImageUrl: user.profileImageUrl,
+          bio: user.bio,
+          badgeCount: userBadges.length,
+          currentStreak: user.currentStreak || 0,
+          totalWins: user.totalWins || 0,
         };
       })
     );
 
     return friends.filter(Boolean);
+  },
+});
+
+// Get full friend profile
+export const getFriendProfile = query({
+  args: {
+    userId: v.id("users"),
+    friendId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const friend = await ctx.db.get(args.friendId);
+    if (!friend) return null;
+
+    // Get badges
+    const userBadges = await ctx.db
+      .query("userBadges")
+      .withIndex("by_user", (q) => q.eq("userId", args.friendId))
+      .collect();
+
+    const badges = await Promise.all(
+      userBadges.map(async (ub) => {
+        const badge = await ctx.db.get(ub.badgeId);
+        return badge ? { ...badge, unlockedAt: ub.unlockedAt } : null;
+      })
+    );
+
+    // Get participations for stats
+    const participations = await ctx.db
+      .query("participations")
+      .withIndex("by_user", (q) => q.eq("usertId", args.friendId))
+      .collect();
+
+    const totalPacts = participations.length;
+    const wonPacts = participations.filter(p => p.status === "won").length;
+    const lostPacts = participations.filter(p => p.status === "lost").length;
+
+    // Calculate level
+    const totalXp = (wonPacts * 100) + (lostPacts * 20) + (userBadges.length * 50);
+    const level = Math.max(1, Math.floor(Math.sqrt(totalXp / 50)) + 1);
+
+    return {
+      _id: friend._id,
+      name: friend.name,
+      username: friend.username,
+      profileImageUrl: friend.profileImageUrl,
+      bio: friend.bio,
+      level,
+      badges: badges.filter(Boolean),
+      stats: {
+        totalPacts,
+        wonPacts,
+        lostPacts,
+        successRate: totalPacts > 0 ? Math.round((wonPacts / totalPacts) * 100) : 0,
+        currentStreak: friend.currentStreak || 0,
+        bestStreak: friend.bestStreak || 0,
+      },
+      createdAt: friend.createdAt || friend._creationTime,
+    };
   },
 });
 
@@ -147,6 +218,9 @@ export const sendFriendRequest = mutation({
     friendId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est l'expéditeur
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     if (args.userId === args.friendId) {
       throw new Error("Tu ne peux pas t'ajouter toi-même");
     }
@@ -194,6 +268,20 @@ export const sendFriendRequest = mutation({
       createdAt: Date.now(),
     });
 
+    // Get sender's name for notification
+    const sender = await ctx.db.get(args.userId);
+
+    // Create notification for receiver
+    await ctx.db.insert("notifications", {
+      userId: args.friendId,
+      type: "friend_request",
+      title: "Nouvelle demande d'ami",
+      body: `${sender?.name || "Quelqu'un"} veut être ton ami !`,
+      data: JSON.stringify({ senderId: args.userId }),
+      read: false,
+      createdAt: Date.now(),
+    });
+
     return { status: "pending" };
   },
 });
@@ -205,6 +293,9 @@ export const acceptFriendRequest = mutation({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est le destinataire
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     const request = await ctx.db.get(args.requestId);
     if (!request) {
       throw new Error("Demande introuvable");
@@ -219,6 +310,21 @@ export const acceptFriendRequest = mutation({
     }
 
     await ctx.db.patch(args.requestId, { status: "accepted" });
+
+    // Get acceptor's name for notification
+    const acceptor = await ctx.db.get(args.userId);
+
+    // Create notification for the person who sent the request
+    await ctx.db.insert("notifications", {
+      userId: request.userId,
+      type: "friend_accepted",
+      title: "Demande acceptée",
+      body: `${acceptor?.name || "Quelqu'un"} a accepté ta demande d'ami !`,
+      data: JSON.stringify({ friendId: args.userId }),
+      read: false,
+      createdAt: Date.now(),
+    });
+
     return { success: true };
   },
 });
@@ -230,6 +336,9 @@ export const rejectFriendRequest = mutation({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est le destinataire
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     const request = await ctx.db.get(args.requestId);
     if (!request) {
       throw new Error("Demande introuvable");
@@ -251,6 +360,9 @@ export const removeFriend = mutation({
     friendId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui supprime
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     // Find and delete the friendship (could be in either direction)
     const friendship1 = await ctx.db
       .query("friendships")
@@ -284,6 +396,9 @@ export const setUsername = mutation({
     username: v.string(),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui modifie
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     const cleanUsername = args.username.toLowerCase().replace(/[^a-z0-9_]/g, "");
 
     if (cleanUsername.length < 3) {

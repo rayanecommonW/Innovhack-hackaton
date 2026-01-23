@@ -13,10 +13,16 @@ import {
   RefreshControl,
   StyleSheet,
   Image,
+  Modal,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useAuth } from "../../providers/AuthProvider";
 import { router } from "expo-router";
@@ -24,6 +30,10 @@ import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import AddFundsModal from "../../components/AddFundsModal";
 import FriendsModal from "../../components/FriendsModal";
 import { getCategoryName } from "../../constants/categories";
+import Constants from "expo-constants";
+
+// Check if we're in Expo Go (no native Stripe support)
+const isExpoGo = Constants.appOwnership === "expo";
 import {
   Colors,
   Spacing,
@@ -46,6 +56,15 @@ export default function ProfileScreen() {
   const [showFriends, setShowFriends] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Withdrawal modal
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawing, setWithdrawing] = useState(false);
+
+  // Use simulated withdrawal in Expo Go, real Stripe in dev builds
+  const withdrawFundsReal = useAction(api.stripeActions.createWithdrawal);
+  const withdrawFundsSimulated = useMutation(api.stripe.withdrawFunds);
+
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
     refreshUser?.();
@@ -55,6 +74,12 @@ export default function ProfileScreen() {
   // Get full profile with image and badges
   const profile = useQuery(
     api.users.getPublicProfile,
+    userId ? { userId } : "skip"
+  );
+
+  // Get user level (calculated from XP)
+  const userLevel = useQuery(
+    api.stats.getUserLevel,
     userId ? { userId } : "skip"
   );
 
@@ -70,6 +95,86 @@ export default function ProfileScreen() {
 
   const handleSubmitProof = (participationId: string) => {
     router.push({ pathname: "/submit-proof", params: { participationId } });
+  };
+
+  const handleWithdraw = async () => {
+    if (!userId) return;
+
+    const amount = parseFloat(withdrawAmount);
+
+    // Validation côté client avec messages propres
+    if (isNaN(amount) || amount <= 0) {
+      Alert.alert("Erreur", "Veuillez entrer un montant valide");
+      return;
+    }
+
+    if (amount < 10) {
+      Alert.alert("Montant insuffisant", "Le montant minimum de retrait est de 10€");
+      return;
+    }
+
+    if (amount > (user?.balance || 0)) {
+      Alert.alert("Solde insuffisant", `Vous n'avez que ${(user?.balance || 0).toFixed(2)}€ disponible`);
+      return;
+    }
+
+    setWithdrawing(true);
+    try {
+      let result;
+
+      if (isExpoGo) {
+        // Simulated withdrawal in Expo Go
+        result = await withdrawFundsSimulated({
+          userId,
+          amount,
+          iban: "FR7630006000011234567890189", // Dummy IBAN for simulation
+        });
+        Alert.alert(
+          "Retrait effectué (Mode Test)",
+          `${amount}€ ont été retirés.\n\nNouveau solde: ${result.newBalance.toFixed(2)}€\n\n⚠️ Retrait simulé - Expo Go ne supporte pas Stripe natif.`,
+          [{ text: "OK", onPress: () => {
+            setShowWithdrawModal(false);
+            setWithdrawAmount("");
+            refreshUser?.();
+          }}]
+        );
+      } else {
+        // Real Stripe withdrawal
+        result = await withdrawFundsReal({
+          userId,
+          amount,
+        });
+        Alert.alert(
+          "Retrait effectué",
+          `${amount}€ ont été envoyés vers votre compte bancaire.\n\nNouveau solde: ${result.newBalance.toFixed(2)}€`,
+          [{ text: "OK", onPress: () => {
+            setShowWithdrawModal(false);
+            setWithdrawAmount("");
+            refreshUser?.();
+          }}]
+        );
+      }
+    } catch (error: any) {
+      // Transformer les erreurs Convex en messages propres
+      const errorMessage = error.message || "Une erreur est survenue";
+      let userFriendlyMessage = errorMessage;
+
+      if (errorMessage.includes("compte bancaire") || errorMessage.includes("Configure ton compte")) {
+        userFriendlyMessage = "Configure ton compte bancaire dans les paramètres avant de pouvoir effectuer des retraits.";
+      } else if (errorMessage.includes("Vérification d'identité") || errorMessage.includes("KYC")) {
+        userFriendlyMessage = "Vérifie ton identité dans les paramètres avant de pouvoir effectuer des retraits.";
+      } else if (errorMessage.includes("Montant minimum")) {
+        userFriendlyMessage = "Le montant minimum de retrait est de 10€";
+      } else if (errorMessage.includes("Solde insuffisant")) {
+        userFriendlyMessage = `Solde insuffisant. Vous avez ${(user?.balance || 0).toFixed(2)}€ disponible`;
+      } else if (errorMessage.includes("Utilisateur non trouvé")) {
+        userFriendlyMessage = "Session expirée. Veuillez vous reconnecter.";
+      }
+
+      Alert.alert("Erreur", userFriendlyMessage);
+    } finally {
+      setWithdrawing(false);
+    }
   };
 
   if (isLoading) {
@@ -208,9 +313,9 @@ export default function ProfileScreen() {
         {/* Level Progress */}
         <Animated.View entering={FadeInDown.delay(110).duration(400)} style={styles.levelSection}>
           <LevelProgress
-            xp={profile?.xp || 150}
-            level={profile?.level || 2}
-            xpToNextLevel={250}
+            xp={userLevel?.xp ?? 0}
+            level={userLevel?.level ?? 1}
+            xpToNextLevel={userLevel?.xpToNextLevel ?? 25}
           />
         </Animated.View>
 
@@ -222,13 +327,26 @@ export default function ProfileScreen() {
           </View>
           <View style={styles.balanceMain}>
             <Text style={styles.balanceAmount}>{user.balance.toFixed(2)}€</Text>
-            <TouchableOpacity
-              onPress={() => setShowAddFunds(true)}
-              style={styles.addFundsButton}
-            >
-              <Ionicons name="add" size={18} color={Colors.white} />
-              <Text style={styles.addFundsText}>Ajouter</Text>
-            </TouchableOpacity>
+            <View style={styles.balanceButtons}>
+              <TouchableOpacity
+                onPress={() => setShowAddFunds(true)}
+                style={styles.addFundsButton}
+              >
+                <Ionicons name="add" size={18} color={Colors.white} />
+                <Text style={styles.addFundsText}>Ajouter</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setShowWithdrawModal(true)}
+                style={[
+                  styles.withdrawFundsButton,
+                  user.balance < 10 && styles.withdrawFundsButtonDisabled,
+                ]}
+                disabled={user.balance < 10}
+              >
+                <Ionicons name="arrow-down" size={18} color={user.balance < 10 ? Colors.textMuted : Colors.accent} />
+                <Text style={[styles.withdrawFundsText, user.balance < 10 && styles.withdrawFundsTextDisabled]}>Retirer</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </Animated.View>
 
@@ -403,7 +521,7 @@ export default function ProfileScreen() {
                 />
               </View>
               <View>
-                <Text style={styles.actionCardTitle}>Validation communautaire</Text>
+                <Text style={styles.actionCardTitle}>Preuves à valider</Text>
                 <Text style={[
                   styles.actionCardSubtitle,
                   proofsToVote && proofsToVote.length > 0 && styles.actionCardSubtitleActive
@@ -495,6 +613,75 @@ export default function ProfileScreen() {
         userId={userId}
         userUsername={user?.username}
       />
+
+      {/* Withdrawal Modal */}
+      <Modal
+        visible={showWithdrawModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowWithdrawModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowWithdrawModal(false)}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={styles.modalKeyboard}
+          >
+            <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Retirer des fonds</Text>
+                <TouchableOpacity
+                  onPress={() => setShowWithdrawModal(false)}
+                  style={styles.modalClose}
+                >
+                  <Ionicons name="close" size={24} color={Colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalBalance}>
+                Solde disponible: {(user?.balance || 0).toFixed(2)}€
+              </Text>
+
+              <View style={styles.modalInputGroup}>
+                <Text style={styles.modalInputLabel}>Montant (€)</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  value={withdrawAmount}
+                  onChangeText={setWithdrawAmount}
+                  placeholder="Minimum 10€"
+                  placeholderTextColor={Colors.textMuted}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={styles.withdrawInfo}>
+                <Ionicons name="information-circle-outline" size={18} color={Colors.info} />
+                <Text style={styles.withdrawInfoText}>
+                  Le retrait sera envoyé sur le compte bancaire configuré dans Stripe.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.confirmWithdrawButton, withdrawing && styles.confirmWithdrawButtonDisabled]}
+                onPress={handleWithdraw}
+                disabled={withdrawing}
+              >
+                {withdrawing ? (
+                  <ActivityIndicator color={Colors.white} />
+                ) : (
+                  <Text style={styles.confirmWithdrawText}>Confirmer le retrait</Text>
+                )}
+              </TouchableOpacity>
+
+              <Text style={styles.modalDisclaimer}>
+                Le virement sera effectué sous 2-3 jours ouvrés.
+              </Text>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -686,9 +873,8 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   balanceMain: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: "column",
+    gap: Spacing.md,
   },
   balanceAmount: {
     fontSize: 32,
@@ -698,6 +884,7 @@ const styles = StyleSheet.create({
   addFundsButton: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     backgroundColor: Colors.accent,
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
@@ -708,6 +895,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
     color: Colors.white,
+  },
+  balanceButtons: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: Spacing.sm,
+  },
+  withdrawFundsButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.surface,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.full,
+    gap: Spacing.xs,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+  },
+  withdrawFundsButtonDisabled: {
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceHighlight,
+  },
+  withdrawFundsText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.accent,
+  },
+  withdrawFundsTextDisabled: {
+    color: Colors.textMuted,
   },
 
   // Stats Row
@@ -922,5 +1138,97 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 120,
+  },
+
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalKeyboard: {
+    width: "100%",
+  },
+  modalContent: {
+    backgroundColor: Colors.background,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.lg,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+  },
+  modalClose: {
+    padding: Spacing.xs,
+  },
+  modalBalance: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.lg,
+    textAlign: "center",
+    fontWeight: "500",
+  },
+  modalInputGroup: {
+    marginBottom: Spacing.md,
+  },
+  modalInputLabel: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.textSecondary,
+    marginBottom: Spacing.xs,
+  },
+  modalInput: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    fontSize: 16,
+    color: Colors.textPrimary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  confirmWithdrawButton: {
+    backgroundColor: Colors.accent,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    alignItems: "center",
+    marginTop: Spacing.md,
+  },
+  confirmWithdrawButtonDisabled: {
+    opacity: 0.6,
+  },
+  confirmWithdrawText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.white,
+  },
+  modalDisclaimer: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    textAlign: "center",
+    marginTop: Spacing.md,
+  },
+  withdrawInfo: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.sm,
+    backgroundColor: Colors.infoMuted,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
+  },
+  withdrawInfoText: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.info,
+    lineHeight: 18,
   },
 });

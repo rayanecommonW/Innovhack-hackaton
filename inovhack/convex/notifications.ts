@@ -193,3 +193,122 @@ export const getNotificationPreferences = query({
     };
   },
 });
+
+// Create reminders for pending friend requests
+export const createFriendRequestReminders = internalMutation({
+  handler: async (ctx) => {
+    const now = Date.now();
+    const twelveHoursAgo = now - 12 * 60 * 60 * 1000;
+
+    // Get all users
+    const users = await ctx.db.query("users").collect();
+
+    for (const user of users) {
+      // Get pending friend requests for this user
+      const pendingRequests = await ctx.db
+        .query("friendships")
+        .withIndex("by_friend", (q) => q.eq("friendId", user._id))
+        .filter((q) => q.eq(q.field("status"), "pending"))
+        .collect();
+
+      if (pendingRequests.length === 0) continue;
+
+      // Check if we already sent a reminder in the last 12 hours
+      const existingReminder = await ctx.db
+        .query("notifications")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("type"), "friend_request_reminder"),
+            q.gte(q.field("createdAt"), twelveHoursAgo)
+          )
+        )
+        .first();
+
+      if (!existingReminder) {
+        await ctx.db.insert("notifications", {
+          userId: user._id,
+          type: "friend_request_reminder",
+          title: "📬 Demandes d'ami en attente",
+          body: `Tu as ${pendingRequests.length} demande${pendingRequests.length > 1 ? "s" : ""} d'ami en attente`,
+          data: JSON.stringify({ count: pendingRequests.length }),
+          read: false,
+          createdAt: now,
+        });
+      }
+    }
+  },
+});
+
+// Create reminders for organizers who have proofs to validate
+export const createProofValidationReminders = internalMutation({
+  handler: async (ctx) => {
+    const now = Date.now();
+    const twelveHoursAgo = now - 12 * 60 * 60 * 1000;
+
+    // Get all active challenges
+    const activeChallenges = await ctx.db
+      .query("challenges")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .collect();
+
+    // Group by creator
+    const challengesByCreator = new Map<string, typeof activeChallenges>();
+    for (const challenge of activeChallenges) {
+      const creatorId = challenge.creatorId.toString();
+      if (!challengesByCreator.has(creatorId)) {
+        challengesByCreator.set(creatorId, []);
+      }
+      challengesByCreator.get(creatorId)!.push(challenge);
+    }
+
+    // For each creator, check if they have pending proofs
+    for (const [creatorId, challenges] of challengesByCreator) {
+      let pendingProofsCount = 0;
+
+      for (const challenge of challenges) {
+        const pendingProofs = await ctx.db
+          .query("proofs")
+          .withIndex("by_challenge", (q) => q.eq("challengeId", challenge._id))
+          .filter((q) => q.eq(q.field("organizerValidation"), "pending"))
+          .collect();
+        pendingProofsCount += pendingProofs.length;
+      }
+
+      if (pendingProofsCount === 0) continue;
+
+      // Check for existing reminder
+      const existingReminder = await ctx.db
+        .query("notifications")
+        .withIndex("by_user", (q) => q.eq("userId", challenges[0].creatorId))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("type"), "proof_validation_reminder"),
+            q.gte(q.field("createdAt"), twelveHoursAgo)
+          )
+        )
+        .first();
+
+      if (!existingReminder) {
+        await ctx.db.insert("notifications", {
+          userId: challenges[0].creatorId,
+          type: "proof_validation_reminder",
+          title: "🔍 Preuves à valider",
+          body: `Tu as ${pendingProofsCount} preuve${pendingProofsCount > 1 ? "s" : ""} en attente de validation`,
+          data: JSON.stringify({ count: pendingProofsCount }),
+          read: false,
+          createdAt: now,
+        });
+      }
+    }
+  },
+});
+
+// Send all recurring reminders (called by cron)
+export const sendAllReminders = internalMutation({
+  handler: async (ctx) => {
+    // Note: This is called by cron. Individual reminder functions are called separately
+    // to avoid timeout issues with large datasets
+    return { success: true };
+  },
+});

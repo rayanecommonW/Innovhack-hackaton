@@ -30,7 +30,7 @@ import {
 const TRANSACTION_TYPES: Record<string, { icon: string; color: string; label: string }> = {
   deposit: { icon: "arrow-down-circle", color: Colors.success, label: "Dépôt" },
   withdrawal: { icon: "arrow-up-circle", color: Colors.danger, label: "Retrait" },
-  bet: { icon: "game-controller", color: Colors.accent, label: "Mise" },
+  bet: { icon: "game-controller", color: Colors.accent, label: "Engagement" },
   win: { icon: "trophy", color: Colors.warning, label: "Gain" },
   refund: { icon: "refresh-circle", color: Colors.info, label: "Remboursement" },
   referral_bonus: { icon: "gift", color: Colors.success, label: "Bonus parrainage" },
@@ -40,7 +40,7 @@ const FILTER_OPTIONS = [
   { value: "", label: "Toutes" },
   { value: "deposit", label: "Dépôts" },
   { value: "withdrawal", label: "Retraits" },
-  { value: "bet", label: "Mises" },
+  { value: "bet", label: "Engagements" },
   { value: "win", label: "Gains" },
   { value: "refund", label: "Remboursements" },
 ];

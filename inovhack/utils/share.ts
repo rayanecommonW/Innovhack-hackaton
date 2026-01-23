@@ -8,7 +8,7 @@ import * as Linking from "expo-linking";
 
 // App store URLs (placeholder - replace with actual URLs when published)
 const APP_STORE_URL = "https://apps.apple.com/app/pact";
-const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.pact.app";
+const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=app.paact.ios";
 
 // Get the appropriate store URL based on platform
 export const getAppStoreUrl = () => {

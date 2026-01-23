@@ -1,6 +1,7 @@
 /**
  * Onboarding Screen - Clean & Elegant Tutorial
  * LUMA-inspired: soft, welcoming, minimal design
+ * With mandatory legal acceptance for French compliance
  */
 
 import React, { useState, useRef } from "react";
@@ -35,6 +36,7 @@ import {
   Spacing,
   BorderRadius,
 } from "../constants/theme";
+import LegalAcceptanceModal from "../components/LegalAcceptanceModal";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -57,7 +59,7 @@ const ONBOARDING_SLIDES: OnboardingSlide[] = [
     title: "Bienvenue sur PACT",
     subtitle: "Transforme tes objectifs en engagements",
     description:
-      "PACT t'aide a tenir tes engagements en misant sur toi-meme. Cree des defis, mise de l'argent, et gagne quand tu reussis.",
+      "PACT t'aide a tenir tes engagements. Definis des objectifs, engage-toi financierement, et recupere ton engagement quand tu reussis.",
   },
   {
     id: "challenges",
@@ -67,7 +69,7 @@ const ONBOARDING_SLIDES: OnboardingSlide[] = [
     title: "Cree des defis",
     subtitle: "Seul ou avec tes amis",
     description:
-      "Definis ton objectif, choisis une duree, et fixe une mise. Tu peux creer des defis prives entre amis ou rejoindre des challenges publics.",
+      "Definis ton objectif, choisis une duree, et fixe ton engagement. Tu peux creer des defis prives entre amis ou rejoindre des challenges publics.",
   },
   {
     id: "proofs",
@@ -87,7 +89,7 @@ const ONBOARDING_SLIDES: OnboardingSlide[] = [
     title: "Gagne des recompenses",
     subtitle: "Argent, badges, et gloire",
     description:
-      "Reussis tes defis pour recuperer ta mise et gagner des bonus. Collectionne des badges et grimpe dans les classements.",
+      "Reussis tes defis pour recuperer ton engagement et obtenir des bonus. Collectionne des badges et grimpe dans les classements.",
   },
   {
     id: "start",
@@ -104,6 +106,7 @@ const ONBOARDING_SLIDES: OnboardingSlide[] = [
 export default function OnboardingScreen() {
   const { userId } = useAuth();
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [showLegalModal, setShowLegalModal] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const completeOnboarding = useMutation(api.users.completeOnboarding);
 
@@ -139,18 +142,45 @@ export default function OnboardingScreen() {
     }
   };
 
-  const handleSkip = async () => {
-    await finishOnboarding();
+  const handleSkip = () => {
+    // Must accept legal terms before skipping
+    setShowLegalModal(true);
   };
 
-  const handleGetStarted = async () => {
-    await finishOnboarding();
+  const handleGetStarted = () => {
+    // Must accept legal terms before starting
+    setShowLegalModal(true);
   };
 
-  const finishOnboarding = async () => {
+  const handleLegalAccept = async (acceptances: {
+    termsAccepted: boolean;
+    privacyAccepted: boolean;
+    natureAccepted: boolean;
+    ageVerified: boolean;
+  }) => {
+    setShowLegalModal(false);
+    await finishOnboarding(acceptances);
+  };
+
+  const handleLegalDecline = () => {
+    setShowLegalModal(false);
+    // User declined - stay on onboarding
+  };
+
+  const finishOnboarding = async (acceptances?: {
+    termsAccepted: boolean;
+    privacyAccepted: boolean;
+    natureAccepted: boolean;
+    ageVerified: boolean;
+  }) => {
     if (userId) {
       try {
-        await completeOnboarding({ userId });
+        await completeOnboarding({
+          userId,
+          termsAccepted: acceptances?.termsAccepted,
+          privacyAccepted: acceptances?.privacyAccepted,
+          ageVerified: acceptances?.ageVerified,
+        });
       } catch (error) {
         console.error("Error completing onboarding:", error);
       }
@@ -273,6 +303,13 @@ export default function OnboardingScreen() {
           </Text>
         </Text>
       </Animated.View>
+
+      {/* Legal Acceptance Modal */}
+      <LegalAcceptanceModal
+        visible={showLegalModal}
+        onAccept={handleLegalAccept}
+        onDecline={handleLegalDecline}
+      />
     </SafeAreaView>
   );
 }

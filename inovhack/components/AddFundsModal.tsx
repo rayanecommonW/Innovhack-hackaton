@@ -1,6 +1,11 @@
 /**
  * Add Funds Modal - LUMA Inspired Design
  * Clean, elegant, minimal payment interface
+ * With integrated financial disclaimer for legal compliance
+ *
+ * Supports both:
+ * - Real Stripe payments (development build)
+ * - Simulated payments (Expo Go for testing)
  */
 
 import React, { useState } from "react";
@@ -18,7 +23,7 @@ import {
   Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery, useAction } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import Animated, { FadeIn, FadeInDown, SlideInDown } from "react-native-reanimated";
@@ -28,6 +33,26 @@ import {
   BorderRadius,
   Shadows,
 } from "../constants/theme";
+import FinancialDisclaimerModal from "./FinancialDisclaimerModal";
+import Constants from "expo-constants";
+
+// Check if we're in Expo Go (no native Stripe support)
+const isExpoGo = Constants.appOwnership === "expo";
+
+// Conditionally import Stripe (only works in development builds)
+let useStripe: any = () => ({
+  initPaymentSheet: async () => ({ error: null }),
+  presentPaymentSheet: async () => ({ error: null }),
+});
+
+if (!isExpoGo) {
+  try {
+    const stripe = require("@stripe/stripe-react-native");
+    useStripe = stripe.useStripe;
+  } catch (e) {
+    console.log("Stripe native module not available, using simulation mode");
+  }
+}
 
 interface AddFundsModalProps {
   visible: boolean;
@@ -36,7 +61,7 @@ interface AddFundsModalProps {
   onSuccess?: () => void;
 }
 
-type PaymentMethod = "card" | "crypto" | "apple_pay" | "google_pay";
+type PaymentMethod = "card" | "apple_pay" | "google_pay";
 
 const QUICK_AMOUNTS = [10, 25, 50, 100];
 
@@ -49,13 +74,25 @@ export default function AddFundsModal({
   const [amount, setAmount] = useState("");
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
 
-  const addFunds = useMutation(api.users.addFunds);
+  // Stripe hooks (will be mocked in Expo Go)
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+
+  // Convex - use simulation for Expo Go, real action for dev build
+  const addFundsSimulated = useMutation(api.users.addFunds);
+  const createPaymentIntent = useAction(api.stripeActions.createDepositPaymentIntent);
+
+  // Check if user has made deposits before (for disclaimer display)
+  const user = useQuery(api.users.getUser, userId ? { userId } : "skip");
 
   const isIOS = Platform.OS === "ios";
   const mobilePay = isIOS ? "apple_pay" : "google_pay";
   const mobilePayLabel = isIOS ? "Apple Pay" : "Google Pay";
   const mobilePayIcon = isIOS ? "logo-apple" : "logo-google";
+
+  // Show disclaimer before first deposit (or if balance is 0)
+  const isFirstDeposit = !user?.balance || user.balance === 0;
 
   const handleAddFunds = async () => {
     const numAmount = parseFloat(amount);
@@ -63,33 +100,128 @@ export default function AddFundsModal({
       Alert.alert("Erreur", "Montant invalide");
       return;
     }
+    if (numAmount < 5) {
+      Alert.alert("Erreur", "Montant minimum: 5€");
+      return;
+    }
+    if (numAmount > 1000) {
+      Alert.alert("Erreur", "Montant maximum: 1000€");
+      return;
+    }
     if (!selectedMethod) {
       Alert.alert("Erreur", "Choisis un moyen de paiement");
       return;
     }
 
+    // Show financial disclaimer for first-time depositors
+    if (isFirstDeposit) {
+      setShowDisclaimer(true);
+      return;
+    }
+
+    await processPayment(numAmount);
+  };
+
+  const processPayment = async (numAmount: number) => {
     setIsProcessing(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // In Expo Go, use simulated payment
+      if (isExpoGo) {
+        await processSimulatedPayment(numAmount);
+        return;
+      }
 
-      await addFunds({
+      // Real Stripe payment flow for development builds
+      // 1. Create PaymentIntent on server
+      const { clientSecret, paymentIntentId } = await createPaymentIntent({
         userId,
         amount: numAmount,
-        method: selectedMethod,
-        reference: `TXN_${Date.now()}`,
       });
 
-      Alert.alert("Succes", `${numAmount}€ ajoutes a ton solde`);
+      // 2. Initialize Payment Sheet
+      const { error: initError } = await initPaymentSheet({
+        paymentIntentClientSecret: clientSecret,
+        merchantDisplayName: "PACT",
+        applePay: selectedMethod === "apple_pay" ? {
+          merchantCountryCode: "FR",
+        } : undefined,
+        googlePay: selectedMethod === "google_pay" ? {
+          merchantCountryCode: "FR",
+          testEnv: true,
+        } : undefined,
+        style: "alwaysDark",
+        returnURL: "pact://stripe-redirect",
+      });
+
+      if (initError) {
+        throw new Error(initError.message);
+      }
+
+      // 3. Present Payment Sheet to user
+      const { error: paymentError } = await presentPaymentSheet();
+
+      if (paymentError) {
+        if (paymentError.code === "Canceled") {
+          return;
+        }
+        throw new Error(paymentError.message);
+      }
+
+      // 4. Payment successful - webhook will handle the rest
+      Alert.alert(
+        "Paiement en cours",
+        `Ton dépôt de ${numAmount}€ est en cours de traitement. Tu seras notifié une fois confirmé.`
+      );
       setAmount("");
       setSelectedMethod(null);
       onSuccess?.();
       onClose();
     } catch (err: any) {
+      console.error("Payment error:", err);
       Alert.alert("Erreur", err.message || "Erreur lors du paiement");
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Simulated payment for Expo Go testing
+  const processSimulatedPayment = async (numAmount: number) => {
+    try {
+      // Simulate payment delay
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // Use the simulated addFunds mutation
+      await addFundsSimulated({
+        userId,
+        amount: numAmount,
+        method: selectedMethod!,
+        reference: `SIM_${Date.now()}`,
+      });
+
+      Alert.alert(
+        "Succès (Mode Test)",
+        `${numAmount}€ ajoutés à ton solde.\n\n⚠️ Paiement simulé - Expo Go ne supporte pas Stripe natif.`
+      );
+      setAmount("");
+      setSelectedMethod(null);
+      onSuccess?.();
+      onClose();
+    } catch (err: any) {
+      Alert.alert("Erreur", err.message || "Erreur lors du paiement simulé");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDisclaimerConfirm = () => {
+    setShowDisclaimer(false);
+    const numAmount = parseFloat(amount);
+    processPayment(numAmount);
+  };
+
+  const handleDisclaimerCancel = () => {
+    setShowDisclaimer(false);
   };
 
   const handleClose = () => {
@@ -232,55 +364,8 @@ export default function AddFundsModal({
                 </Text>
               </TouchableOpacity>
 
-              {/* Crypto */}
-              <TouchableOpacity
-                onPress={() => setSelectedMethod("crypto")}
-                style={[
-                  styles.methodCard,
-                  selectedMethod === "crypto" && styles.methodCardSelected,
-                ]}
-                disabled={isProcessing}
-                activeOpacity={0.7}
-              >
-                <View style={[
-                  styles.methodIconBox,
-                  selectedMethod === "crypto" && styles.methodIconBoxSelected,
-                ]}>
-                  <Ionicons
-                    name="wallet-outline"
-                    size={22}
-                    color={selectedMethod === "crypto" ? Colors.white : Colors.textSecondary}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.methodLabel,
-                    selectedMethod === "crypto" && styles.methodLabelSelected,
-                  ]}
-                >
-                  Crypto
-                </Text>
-              </TouchableOpacity>
             </View>
           </Animated.View>
-
-          {/* Crypto Address Info */}
-          {selectedMethod === "crypto" && (
-            <Animated.View entering={FadeIn} style={styles.cryptoInfo}>
-              <View style={styles.cryptoHeader}>
-                <Ionicons name="information-circle-outline" size={18} color={Colors.info} />
-                <Text style={styles.cryptoLabel}>Adresse USDC (Ethereum)</Text>
-              </View>
-              <View style={styles.cryptoAddress}>
-                <Text style={styles.cryptoAddressText} numberOfLines={1}>
-                  0x742d35Cc6634C0532925a3b844Bc9e7595f...
-                </Text>
-                <TouchableOpacity style={styles.copyButton}>
-                  <Ionicons name="copy-outline" size={18} color={Colors.accent} />
-                </TouchableOpacity>
-              </View>
-            </Animated.View>
-          )}
 
           {/* Submit Button */}
           <Animated.View entering={FadeInDown.delay(250)}>
@@ -312,6 +397,14 @@ export default function AddFundsModal({
             <Text style={styles.securityText}>Paiement securise et chiffre</Text>
           </View>
         </Animated.View>
+
+        {/* Financial Disclaimer Modal */}
+        <FinancialDisclaimerModal
+          visible={showDisclaimer}
+          amount={parseFloat(amount) || 0}
+          onConfirm={handleDisclaimerConfirm}
+          onCancel={handleDisclaimerCancel}
+        />
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -463,43 +556,6 @@ const styles = StyleSheet.create({
   methodLabelSelected: {
     color: Colors.accent,
     fontWeight: "600",
-  },
-
-  // Crypto Info
-  cryptoInfo: {
-    backgroundColor: Colors.infoMuted,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  cryptoHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
-    marginBottom: Spacing.sm,
-  },
-  cryptoLabel: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: Colors.info,
-  },
-  cryptoAddress: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.sm,
-    padding: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  cryptoAddressText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: "500",
-    color: Colors.textPrimary,
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-  },
-  copyButton: {
-    padding: Spacing.xs,
   },
 
   // Submit Button

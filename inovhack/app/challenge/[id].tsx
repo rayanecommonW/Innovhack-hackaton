@@ -32,6 +32,7 @@ import {
   Shadows,
 } from "../../constants/theme";
 import ConfettiCelebration, { ConfettiRef } from "../../components/ConfettiCelebration";
+import { getErrorMessage } from "../../utils/errorHandler";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
   pending: { label: "En attente", color: Colors.warning, icon: "time-outline" },
@@ -136,7 +137,7 @@ export default function ChallengeDetailScreen() {
               });
               router.back();
             } catch (error: any) {
-              Alert.alert("Erreur", error.message || "Impossible de supprimer ce pact");
+              Alert.alert("Oups!", getErrorMessage(error));
             } finally {
               setIsDeleting(false);
             }
@@ -169,7 +170,7 @@ export default function ChallengeDetailScreen() {
               await finalizeChallenge({ challengeId: id as Id<"challenges"> });
               Alert.alert("Succès", "Participations finalisées. Relance la distribution.");
             } catch (error: any) {
-              Alert.alert("Erreur", error.message);
+              Alert.alert("Oups!", getErrorMessage(error));
             } finally {
               setIsDistributing(false);
             }
@@ -189,7 +190,7 @@ export default function ChallengeDetailScreen() {
               Alert.alert("Succès", result.message || "Distribution effectuée !");
               confettiRef.current?.fire();
             } catch (error: any) {
-              Alert.alert("Erreur", error.message || "Impossible de distribuer");
+              Alert.alert("Oups!", getErrorMessage(error));
             } finally {
               setIsDistributing(false);
             }
@@ -345,7 +346,7 @@ export default function ChallengeDetailScreen() {
           <View style={styles.detailRow}>
             <Ionicons name="cash-outline" size={18} color={Colors.textTertiary} />
             <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>Mise minimum</Text>
+              <Text style={styles.detailLabel}>Engagement minimum</Text>
               <Text style={styles.detailValue}>{challenge.minBet}€</Text>
             </View>
           </View>

@@ -1,6 +1,6 @@
 /**
  * Badges/Achievements Screen
- * Collection of all badges with progress tracking
+ * Clean horizontal card layout
  */
 
 import React, { useState } from "react";
@@ -18,7 +18,7 @@ import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { useAuth } from "../providers/AuthProvider";
 import { router } from "expo-router";
-import Animated, { FadeInDown, ZoomIn } from "react-native-reanimated";
+import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 import {
   Colors,
   Spacing,
@@ -36,11 +36,41 @@ const CATEGORIES = [
   { value: "special", label: "Spéciaux" },
 ];
 
-const RARITY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  common: { bg: Colors.surfaceHighlight, text: Colors.textSecondary, border: Colors.border },
-  rare: { bg: Colors.infoMuted, text: Colors.info, border: Colors.info },
-  epic: { bg: "rgba(155, 138, 224, 0.1)", text: "#9B8AE0", border: "#9B8AE0" },
-  legendary: { bg: Colors.warningMuted, text: Colors.warning, border: Colors.warning },
+const RARITY_CONFIG: Record<string, { color: string; label: string }> = {
+  common: { color: Colors.textMuted, label: "Commun" },
+  rare: { color: Colors.info, label: "Rare" },
+  epic: { color: "#9B8AE0", label: "Épique" },
+  legendary: { color: Colors.warning, label: "Légendaire" },
+};
+
+// Map emoji to Ionicons
+const BADGE_ICONS: Record<string, string> = {
+  "🏆": "trophy",
+  "⭐": "star",
+  "🌟": "star",
+  "👑": "ribbon",
+  "🔥": "flame",
+  "🦅": "shield-checkmark",
+  "🎯": "locate",
+  "💫": "sparkles",
+  "⚡": "flash",
+  "💎": "diamond",
+  "🤖": "hardware-chip",
+  "💰": "cash",
+  "💵": "cash",
+  "💸": "trending-up",
+  "🏦": "business",
+  "🤑": "wallet",
+  "👥": "people",
+  "🤝": "handshake",
+  "👋": "hand-left",
+  "🎉": "gift",
+  "📊": "stats-chart",
+  "🏃": "footsteps",
+  "🎖️": "medal",
+  "✅": "checkmark-circle",
+  "💳": "card",
+  "🗓️": "calendar",
 };
 
 export default function BadgesScreen() {
@@ -53,11 +83,12 @@ export default function BadgesScreen() {
   );
 
   const filteredBadges = badges?.filter(
-    (b) => category === "all" || b.category === category
+    (b: any) => category === "all" || b.category === category
   );
 
-  const unlockedCount = badges?.filter((b) => b.isUnlocked).length || 0;
+  const unlockedCount = badges?.filter((b: any) => b.isUnlocked).length || 0;
   const totalCount = badges?.length || 0;
+  const progressPercent = totalCount > 0 ? Math.round((unlockedCount / totalCount) * 100) : 0;
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -70,21 +101,22 @@ export default function BadgesScreen() {
         <View style={styles.placeholder} />
       </Animated.View>
 
-      {/* Progress */}
+      {/* Progress Card */}
       <Animated.View entering={FadeInDown.delay(50).duration(400)} style={styles.progressCard}>
-        <View style={styles.progressInfo}>
-          <Text style={styles.progressCount}>
-            {unlockedCount}/{totalCount}
-          </Text>
-          <Text style={styles.progressLabel}>badges débloqués</Text>
+        <View style={styles.progressHeader}>
+          <View style={styles.progressIconBox}>
+            <Ionicons name="ribbon" size={24} color={Colors.accent} />
+          </View>
+          <View style={styles.progressTextContainer}>
+            <Text style={styles.progressTitle}>Ta collection</Text>
+            <Text style={styles.progressSubtitle}>
+              {unlockedCount} sur {totalCount} badges débloqués
+            </Text>
+          </View>
+          <Text style={styles.progressPercent}>{progressPercent}%</Text>
         </View>
         <View style={styles.progressBarContainer}>
-          <View
-            style={[
-              styles.progressBar,
-              { width: totalCount > 0 ? `${(unlockedCount / totalCount) * 100}%` : "0%" },
-            ]}
-          />
+          <View style={[styles.progressBar, { width: `${progressPercent}%` }]} />
         </View>
       </Animated.View>
 
@@ -118,7 +150,7 @@ export default function BadgesScreen() {
         </ScrollView>
       </Animated.View>
 
-      {/* Badges Grid */}
+      {/* Badges List */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -134,11 +166,11 @@ export default function BadgesScreen() {
             <Text style={styles.emptyText}>Aucun badge dans cette catégorie</Text>
           </View>
         ) : (
-          <View style={styles.badgesGrid}>
-            {filteredBadges?.map((badge, index) => (
+          <View style={styles.badgesList}>
+            {filteredBadges?.map((badge: any, index: number) => (
               <Animated.View
-                key={badge._id}
-                entering={ZoomIn.delay(150 + index * 50).duration(300)}
+                key={badge._id || badge.name}
+                entering={FadeInRight.delay(120 + index * 30).duration(300)}
               >
                 <BadgeCard badge={badge} />
               </Animated.View>
@@ -153,59 +185,56 @@ export default function BadgesScreen() {
 }
 
 function BadgeCard({ badge }: { badge: any }) {
-  const rarityConfig = RARITY_COLORS[badge.rarity] || RARITY_COLORS.common;
-  const isLocked = !badge.isUnlocked;
+  const rarityConfig = RARITY_CONFIG[badge.rarity] || RARITY_CONFIG.common;
+  const isUnlocked = badge.isUnlocked;
+  const iconName = BADGE_ICONS[badge.icon] || "ribbon";
 
   return (
-    <View
-      style={[
-        styles.badgeCard,
-        isLocked && styles.badgeCardLocked,
-        badge.isUnlocked && { borderColor: rarityConfig.border, borderWidth: 1 },
-      ]}
-    >
-      <View
-        style={[
-          styles.badgeIconContainer,
-          { backgroundColor: isLocked ? Colors.surfaceSecondary : rarityConfig.bg },
-        ]}
-      >
-        <Text style={[styles.badgeIcon, isLocked && styles.badgeIconLocked]}>
-          {badge.icon}
-        </Text>
+    <View style={[styles.badgeCard, isUnlocked && styles.badgeCardUnlocked]}>
+      {/* Left: Icon */}
+      <View style={[
+        styles.badgeIconBox,
+        isUnlocked ? { backgroundColor: `${rarityConfig.color}15` } : { backgroundColor: Colors.surfaceSecondary }
+      ]}>
+        <Ionicons
+          name={iconName as any}
+          size={24}
+          color={isUnlocked ? rarityConfig.color : Colors.textMuted}
+        />
       </View>
 
-      <Text style={[styles.badgeTitle, isLocked && styles.badgeTitleLocked]}>
-        {badge.title}
-      </Text>
-
-      <Text style={styles.badgeDescription} numberOfLines={2}>
-        {badge.description}
-      </Text>
-
-      {/* Progress or Unlocked Date */}
-      {badge.isUnlocked ? (
-        <View style={[styles.unlockedBadge, { backgroundColor: rarityConfig.bg }]}>
-          <Ionicons name="checkmark" size={12} color={rarityConfig.text} />
-          <Text style={[styles.unlockedText, { color: rarityConfig.text }]}>Débloqué</Text>
+      {/* Middle: Content */}
+      <View style={styles.badgeContent}>
+        <View style={styles.badgeTitleRow}>
+          <Text style={[styles.badgeTitle, !isUnlocked && styles.badgeTitleLocked]} numberOfLines={1}>
+            {badge.title}
+          </Text>
+          <View style={[styles.rarityDot, { backgroundColor: rarityConfig.color }]} />
         </View>
-      ) : (
-        <View style={styles.progressContainer}>
-          <View style={styles.progressBarSmall}>
-            <View style={[styles.progressBarFill, { width: `${badge.progress}%` }]} />
-          </View>
-          <Text style={styles.progressText}>{badge.progress}%</Text>
-        </View>
-      )}
-
-      {/* Rarity */}
-      <View style={[styles.rarityBadge, { backgroundColor: rarityConfig.bg }]}>
-        <Text style={[styles.rarityText, { color: rarityConfig.text }]}>
-          {badge.rarity === "common" && "Commun"}
-          {badge.rarity === "rare" && "Rare"}
-          {badge.rarity === "epic" && "Épique"}
-          {badge.rarity === "legendary" && "Légendaire"}
+        <Text style={styles.badgeDescription} numberOfLines={1}>
+          {badge.description}
         </Text>
+
+        {/* Progress Bar for locked badges */}
+        {!isUnlocked && (
+          <View style={styles.progressRow}>
+            <View style={styles.progressBarSmall}>
+              <View style={[styles.progressBarFill, { width: `${badge.progress}%` }]} />
+            </View>
+            <Text style={styles.progressText}>{badge.progress}%</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Right: Status */}
+      <View style={styles.badgeStatus}>
+        {isUnlocked ? (
+          <View style={[styles.unlockedBadge, { backgroundColor: `${Colors.success}15` }]}>
+            <Ionicons name="checkmark" size={16} color={Colors.success} />
+          </View>
+        ) : (
+          <Ionicons name="lock-closed-outline" size={18} color={Colors.textMuted} />
+        )}
       </View>
     </View>
   );
@@ -232,7 +261,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "600",
     color: Colors.textPrimary,
   },
@@ -240,40 +269,56 @@ const styles = StyleSheet.create({
     width: 40,
   },
 
-  // Progress
+  // Progress Card
   progressCard: {
     marginHorizontal: Spacing.lg,
     marginBottom: Spacing.lg,
     backgroundColor: Colors.surface,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.lg,
     padding: Spacing.lg,
     ...Shadows.sm,
   },
-  progressInfo: {
+  progressHeader: {
     flexDirection: "row",
-    alignItems: "baseline",
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
+    alignItems: "center",
+    marginBottom: Spacing.md,
   },
-  progressCount: {
-    fontSize: 28,
-    fontWeight: "700",
+  progressIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
+    backgroundColor: Colors.accentMuted,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: Spacing.md,
+  },
+  progressTextContainer: {
+    flex: 1,
+  },
+  progressTitle: {
+    fontSize: 16,
+    fontWeight: "600",
     color: Colors.textPrimary,
-    fontVariant: ["tabular-nums"],
   },
-  progressLabel: {
-    fontSize: 14,
+  progressSubtitle: {
+    fontSize: 13,
     color: Colors.textTertiary,
+    marginTop: 2,
+  },
+  progressPercent: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: Colors.accent,
   },
   progressBarContainer: {
-    height: 8,
+    height: 6,
     backgroundColor: Colors.surfaceHighlight,
     borderRadius: BorderRadius.full,
     overflow: "hidden",
   },
   progressBar: {
     height: "100%",
-    backgroundColor: Colors.success,
+    backgroundColor: Colors.accent,
     borderRadius: BorderRadius.full,
   },
 
@@ -288,10 +333,12 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.full,
-    ...Shadows.xs,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   categoryButtonActive: {
     backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
   },
   categoryText: {
     fontSize: 13,
@@ -323,60 +370,66 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
 
-  // Grid
-  badgesGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+  // Badges List
+  badgesList: {
     gap: Spacing.sm,
   },
 
-  // Badge Card
+  // Badge Card - Horizontal
   badgeCard: {
-    width: "48%",
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: Colors.surface,
     borderRadius: BorderRadius.md,
     padding: Spacing.md,
-    ...Shadows.xs,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  badgeCardLocked: {
-    opacity: 0.7,
+  badgeCardUnlocked: {
+    borderColor: Colors.success,
+    backgroundColor: Colors.surface,
   },
-  badgeIconContainer: {
-    width: 56,
-    height: 56,
+  badgeIconBox: {
+    width: 48,
+    height: 48,
     borderRadius: BorderRadius.md,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: Spacing.sm,
+    marginRight: Spacing.md,
   },
-  badgeIcon: {
-    fontSize: 28,
+  badgeContent: {
+    flex: 1,
+    marginRight: Spacing.sm,
   },
-  badgeIconLocked: {
-    opacity: 0.4,
+  badgeTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
   },
   badgeTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "600",
     color: Colors.textPrimary,
-    marginBottom: 4,
+    flex: 1,
   },
   badgeTitleLocked: {
     color: Colors.textTertiary,
   },
-  badgeDescription: {
-    fontSize: 12,
-    color: Colors.textTertiary,
-    marginBottom: Spacing.sm,
-    lineHeight: 16,
+  rarityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-
-  // Progress
-  progressContainer: {
+  badgeDescription: {
+    fontSize: 13,
+    color: Colors.textTertiary,
+    marginTop: 2,
+  },
+  progressRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
-    marginBottom: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   progressBarSmall: {
     flex: 1,
@@ -394,35 +447,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "500",
     color: Colors.textMuted,
-    fontVariant: ["tabular-nums"],
+    width: 30,
+    textAlign: "right",
   },
-
-  // Unlocked
-  unlockedBadge: {
-    flexDirection: "row",
+  badgeStatus: {
+    width: 32,
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.full,
-    alignSelf: "flex-start",
-    marginBottom: Spacing.sm,
   },
-  unlockedText: {
-    fontSize: 11,
-    fontWeight: "500",
-  },
-
-  // Rarity
-  rarityBadge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.full,
-    alignSelf: "flex-start",
-  },
-  rarityText: {
-    fontSize: 10,
-    fontWeight: "500",
+  unlockedBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   bottomSpacer: {

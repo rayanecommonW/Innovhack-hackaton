@@ -86,6 +86,7 @@ export const distributeRewards = mutation({
       await ctx.db.patch(winner.usertId, {
         balance: user.balance + totalReward,
         totalEarnings: (user.totalEarnings || 0) + winShare,
+        totalWins: (user.totalWins || 0) + 1,
       });
 
       // Mettre à jour la participation avec les gains
@@ -128,6 +129,19 @@ export const distributeRewards = mutation({
         createdAt: Date.now(),
       });
 
+      // Push notification de victoire
+      await ctx.scheduler.runAfter(0, internal.pushNotifications.sendChallengeWonNotification, {
+        userId: winner.usertId,
+        challengeId: args.challengeId,
+        challengeTitle: challenge.title,
+        amountWon: totalReward,
+      });
+
+      // Vérifier et débloquer les badges
+      await ctx.scheduler.runAfter(0, internal.badges.checkAndUnlockBadges, {
+        userId: winner.usertId,
+      });
+
       // Activité feed
       await ctx.db.insert("activityFeed", {
         userId: winner.usertId,
@@ -159,6 +173,15 @@ export const distributeRewards = mutation({
           data: JSON.stringify({ challengeId: args.challengeId }),
           read: false,
           createdAt: Date.now(),
+        });
+
+        // Push notification de perte
+        await ctx.scheduler.runAfter(0, internal.pushNotifications.notifyUser, {
+          userId: loser.usertId,
+          title: "Pact perdu",
+          body: `Tu as perdu ${loser.betAmount}€ sur "${challenge.title}"`,
+          data: { challengeId: args.challengeId },
+          type: "challenge_lost",
         });
 
         // Activité feed
@@ -194,58 +217,174 @@ export const distributeRewards = mutation({
   },
 });
 
-// Vérifier et distribuer les défis terminés (appelé par cron)
+/**
+ * Vérifier et gérer les défis terminés (appelé par cron toutes les heures)
+ *
+ * FLOW:
+ * 1. Pact endDate passée → passe en "validating", définit validationDeadline (+24h)
+ * 2. Organisateur a 24h pour valider les preuves en attente
+ * 3. Après validationDeadline → auto-finalise (preuves non validées = rejetées)
+ */
 export const checkAndDistributeEndedChallenges = internalMutation({
   handler: async (ctx) => {
     const now = Date.now();
+    const GRACE_PERIOD = 24 * 60 * 60 * 1000; // 24 heures
 
-    // Récupérer les défis actifs dont la date de fin est passée
-    const challenges = await ctx.db
+    // ==== ÉTAPE 1: Passer les pacts expirés en mode "validating" ====
+    const activeChallenges = await ctx.db
       .query("challenges")
       .withIndex("by_status", (q) => q.eq("status", "active"))
       .collect();
 
-    const endedChallenges = challenges.filter((c) => c.endDate <= now);
+    const expiredChallenges = activeChallenges.filter((c) => c.endDate <= now);
+
+    for (const challenge of expiredChallenges) {
+      // Passer en mode validation avec deadline +24h
+      await ctx.db.patch(challenge._id, {
+        status: "validating",
+        validationDeadline: now + GRACE_PERIOD,
+      });
+
+      // Notifier l'organisateur
+      await ctx.db.insert("notifications", {
+        userId: challenge.creatorId,
+        type: "validation_required",
+        title: "Validation requise",
+        body: `Le pact "${challenge.title}" est terminé. Tu as 24h pour valider les preuves.`,
+        data: JSON.stringify({ challengeId: challenge._id }),
+        read: false,
+        createdAt: now,
+      });
+
+      // Notifier les participants que le pact est en phase de validation
+      const participations = await ctx.db
+        .query("participations")
+        .withIndex("by_challenge", (q) => q.eq("challengeId", challenge._id))
+        .collect();
+
+      for (const p of participations) {
+        if (p.status === "pending_validation") {
+          await ctx.db.insert("notifications", {
+            userId: p.usertId,
+            type: "validation_pending",
+            title: "En attente de validation",
+            body: `Ta preuve pour "${challenge.title}" est en cours de validation. Résultats dans 24h max.`,
+            data: JSON.stringify({ challengeId: challenge._id }),
+            read: false,
+            createdAt: now,
+          });
+        } else if (p.status === "active" || p.status === "pending_proof") {
+          // Pas de preuve soumise → perdant
+          await ctx.db.patch(p._id, { status: "lost" });
+          await ctx.db.insert("notifications", {
+            userId: p.usertId,
+            type: "time_expired",
+            title: "Temps écoulé",
+            body: `Le délai pour "${challenge.title}" est terminé. Tu n'as pas soumis de preuve.`,
+            data: JSON.stringify({ challengeId: challenge._id }),
+            read: false,
+            createdAt: now,
+          });
+        }
+      }
+    }
+
+    // ==== ÉTAPE 2: Finaliser les pacts dont la période de validation est terminée ====
+    const validatingChallenges = await ctx.db
+      .query("challenges")
+      .withIndex("by_status", (q) => q.eq("status", "validating"))
+      .collect();
+
+    const toFinalize = validatingChallenges.filter(
+      (c) => c.validationDeadline && c.validationDeadline <= now
+    );
 
     const results = [];
-    for (const challenge of endedChallenges) {
+    for (const challenge of toFinalize) {
       try {
-        // Marquer les participants sans preuve comme perdants
         const participations = await ctx.db
           .query("participations")
           .withIndex("by_challenge", (q) => q.eq("challengeId", challenge._id))
           .collect();
 
+        // Preuves non validées après 24h → auto-approuver
         for (const p of participations) {
-          if (p.status === "active" || p.status === "pending_proof") {
-            await ctx.db.patch(p._id, { status: "lost" });
+          if (p.status === "pending_validation") {
+            // Re-fetch to avoid race condition with manual validation
+            const currentP = await ctx.db.get(p._id);
+            if (!currentP || currentP.status !== "pending_validation") {
+              // Already validated manually, skip
+              continue;
+            }
 
-            // Notifier que le temps est écoulé
+            // L'organisateur n'a pas validé dans les 24h
+            // On auto-approuve car l'organisateur a eu sa chance
+            await ctx.db.patch(p._id, { status: "won" });
+
+            // Mettre à jour la preuve
+            const proof = await ctx.db
+              .query("proofs")
+              .withIndex("by_participation", (q) => q.eq("participationId", p._id))
+              .first();
+
+            if (proof) {
+              await ctx.db.patch(proof._id, {
+                organizerValidation: "approved",
+                organizerComment: "Auto-approuvé (délai de validation expiré)",
+                validatedAt: now,
+              });
+            }
+
             await ctx.db.insert("notifications", {
               userId: p.usertId,
-              type: "time_expired",
-              title: "Temps écoulé",
-              body: `Le délai pour "${challenge.title}" est terminé. Tu n'as pas soumis de preuve.`,
+              type: "auto_approved",
+              title: "Preuve auto-validée",
+              body: `Ta preuve pour "${challenge.title}" a été automatiquement validée.`,
               data: JSON.stringify({ challengeId: challenge._id }),
               read: false,
-              createdAt: Date.now(),
+              createdAt: now,
             });
           }
         }
 
+        // Recalculer après auto-validation
+        const updatedParticipations = await ctx.db
+          .query("participations")
+          .withIndex("by_challenge", (q) => q.eq("challengeId", challenge._id))
+          .collect();
+
         // Distribuer les gains
-        // Note: On fait la distribution ici directement
-        const winners = participations.filter((p) => p.status === "won");
-        const losers = participations.filter((p) => p.status !== "won");
+        const winners = updatedParticipations.filter((p) => p.status === "won");
+        const losers = updatedParticipations.filter((p) => p.status === "lost");
+        const totalPot = updatedParticipations.reduce((sum, p) => sum + p.betAmount, 0);
         const losersPot = losers.reduce((sum, p) => sum + p.betAmount, 0);
         const winnersTotal = winners.reduce((sum, p) => sum + p.betAmount, 0);
 
         if (winners.length === 0) {
-          // Rembourser tout le monde
-          for (const p of participations) {
+          // Aucun gagnant → rembourser tout le monde
+          for (const p of updatedParticipations) {
             const user = await ctx.db.get(p.usertId);
             if (user) {
               await ctx.db.patch(p.usertId, { balance: user.balance + p.betAmount });
+              await ctx.db.insert("transactions", {
+                userId: p.usertId,
+                amount: p.betAmount,
+                type: "refund",
+                status: "completed",
+                description: `Remboursement - ${challenge.title}`,
+                relatedChallengeId: challenge._id,
+                createdAt: now,
+                completedAt: now,
+              });
+              await ctx.db.insert("notifications", {
+                userId: p.usertId,
+                type: "refund",
+                title: "Remboursement",
+                body: `Tu as été remboursé de ${p.betAmount}€ pour "${challenge.title}" (aucun gagnant)`,
+                data: JSON.stringify({ challengeId: challenge._id }),
+                read: false,
+                createdAt: now,
+              });
             }
           }
         } else {
@@ -253,30 +392,82 @@ export const checkAndDistributeEndedChallenges = internalMutation({
           for (const winner of winners) {
             const user = await ctx.db.get(winner.usertId);
             if (user) {
-              const winShare = (winner.betAmount / winnersTotal) * losersPot;
+              const winShare = winnersTotal > 0 ? (winner.betAmount / winnersTotal) * losersPot : 0;
               const totalReward = winner.betAmount + winShare;
+
               await ctx.db.patch(winner.usertId, {
                 balance: user.balance + totalReward,
                 totalEarnings: (user.totalEarnings || 0) + winShare,
+                totalWins: (user.totalWins || 0) + 1,
               });
               await ctx.db.patch(winner._id, { earnings: totalReward });
+
+              await ctx.db.insert("transactions", {
+                userId: winner.usertId,
+                amount: totalReward,
+                type: "win",
+                status: "completed",
+                description: `Gain - ${challenge.title}`,
+                relatedChallengeId: challenge._id,
+                createdAt: now,
+                completedAt: now,
+              });
+
+              await ctx.db.insert("notifications", {
+                userId: winner.usertId,
+                type: "you_won",
+                title: "Tu as gagné ! 🎉",
+                body: `Tu as gagné ${totalReward.toFixed(2)}€ pour "${challenge.title}" !`,
+                data: JSON.stringify({ challengeId: challenge._id, amount: totalReward }),
+                read: false,
+                createdAt: now,
+              });
+
+              // Vérifier et débloquer les badges
+              await ctx.scheduler.runAfter(0, internal.badges.checkAndUnlockBadges, {
+                userId: winner.usertId,
+              });
             }
+          }
+
+          // Notifier les perdants
+          for (const loser of losers) {
+            await ctx.db.patch(loser.usertId, {
+              totalLosses: ((await ctx.db.get(loser.usertId))?.totalLosses || 0) + 1,
+            });
+
+            await ctx.db.insert("notifications", {
+              userId: loser.usertId,
+              type: "you_lost",
+              title: "Pact perdu",
+              body: `Tu as perdu ${loser.betAmount}€ sur "${challenge.title}"`,
+              data: JSON.stringify({ challengeId: challenge._id }),
+              read: false,
+              createdAt: now,
+            });
           }
         }
 
+        // Marquer le défi comme terminé
         await ctx.db.patch(challenge._id, {
           status: "completed",
           winnersCount: winners.length,
           losersCount: losers.length,
+          totalPot,
         });
 
-        results.push({ challengeId: challenge._id, success: true });
+        results.push({ challengeId: challenge._id, success: true, winners: winners.length, losers: losers.length });
       } catch (error) {
+        console.error("Error finalizing challenge:", challenge._id, error);
         results.push({ challengeId: challenge._id, success: false, error: String(error) });
       }
     }
 
-    return { processed: results.length, results };
+    return {
+      movedToValidating: expiredChallenges.length,
+      finalized: results.length,
+      results,
+    };
   },
 });
 

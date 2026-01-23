@@ -146,7 +146,7 @@ export const distributeRewards = mutation({
         amount: totalReturn,
         type: "win",
         status: "completed",
-        description: `Gain - ${challenge.title} (mise: ${winner.betAmount}€ + bonus: ${earnings.toFixed(2)}€)`,
+        description: `Gain - ${challenge.title} (engagement: ${winner.betAmount}€ + bonus: ${earnings.toFixed(2)}€)`,
         relatedChallengeId: args.challengeId,
         createdAt: Date.now(),
         completedAt: Date.now(),

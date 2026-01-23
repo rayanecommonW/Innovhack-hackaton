@@ -1,5 +1,14 @@
+/**
+ * Auth Provider - Syncs Clerk auth with Convex user
+ *
+ * Flow:
+ * 1. Clerk handles authentication (Google, Apple, Email)
+ * 2. When user signs in, we create/get Convex user
+ * 3. Convex user ID is used throughout the app
+ */
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useUser, useAuth as useClerkAuth } from "@clerk/clerk-expo";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
@@ -22,102 +31,136 @@ interface User {
   onboardingCompleted?: boolean;
   notificationsEnabled?: boolean;
   pushToken?: string;
+  clerkId?: string;
 }
 
 interface AuthContextType {
+  // Clerk state
+  isClerkLoaded: boolean;
+  isSignedIn: boolean;
+  clerkUser: ReturnType<typeof useUser>["user"];
+
+  // Convex user
   user: User | null;
   userId: Id<"users"> | null;
+
+  // Combined state
   isLoading: boolean;
   isAuthenticated: boolean;
   needsOnboarding: boolean;
-  login: (email: string) => Promise<boolean>;
-  signup: (name: string, email: string) => Promise<boolean>;
-  logout: () => Promise<void>;
+  needsUsername: boolean;
+
+  // Actions
+  signOut: () => Promise<void>;
   refreshUser: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const USER_STORAGE_KEY = "@betbuddy_user_id";
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [userId, setUserId] = useState<Id<"users"> | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { isLoaded: isClerkLoaded, isSignedIn, user: clerkUser } = useUser();
+  const { signOut: clerkSignOut } = useClerkAuth();
 
-  const createUser = useMutation(api.users.createUser);
-  const user = useQuery(api.users.getUser, userId ? { userId } : "skip");
+  const [convexUserId, setConvexUserId] = useState<Id<"users"> | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
-  // Load stored user ID on mount
+  // Mutations
+  const getOrCreateUserFromClerk = useMutation(api.users.getOrCreateUserFromClerk);
+
+  // Get Convex user data
+  const convexUser = useQuery(
+    api.users.getUser,
+    convexUserId ? { userId: convexUserId } : "skip"
+  );
+
+  // Sync Clerk user to Convex when signed in
   useEffect(() => {
-    loadStoredUser();
-  }, []);
+    const syncUser = async () => {
+      if (isClerkLoaded && isSignedIn && clerkUser && !isSyncing) {
+        setIsSyncing(true);
+        try {
+          const email = clerkUser.primaryEmailAddress?.emailAddress;
+          const name = clerkUser.fullName ||
+                       clerkUser.firstName ||
+                       email?.split("@")[0] ||
+                       "Utilisateur";
 
-  const loadStoredUser = async () => {
-    try {
-      const storedUserId = await AsyncStorage.getItem(USER_STORAGE_KEY);
-      if (storedUserId) {
-        setUserId(storedUserId as Id<"users">);
+          // Get username from Clerk (from signup or unsafeMetadata)
+          const metadata = clerkUser.unsafeMetadata as any;
+          const username = clerkUser.username || metadata?.username;
+          const birthDate = metadata?.birthDate;
+          const ageVerified = metadata?.ageVerified;
+
+          if (email) {
+            const userId = await getOrCreateUserFromClerk({
+              clerkId: clerkUser.id,
+              email,
+              name,
+              profileImageUrl: clerkUser.imageUrl,
+              username: username || undefined,
+              birthDate: birthDate || undefined,
+              ageVerified: ageVerified || undefined,
+            });
+            setConvexUserId(userId);
+          }
+        } catch (error) {
+          console.error("Error syncing user to Convex:", error);
+        } finally {
+          setIsSyncing(false);
+        }
+      } else if (isClerkLoaded && !isSignedIn) {
+        setConvexUserId(null);
       }
-    } catch (error) {
-      console.error("Error loading user:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
 
-  const login = async (email: string): Promise<boolean> => {
+    syncUser();
+  }, [isClerkLoaded, isSignedIn, clerkUser?.id]);
+
+  const signOut = async () => {
     try {
-      // Try to create user (will return existing if email exists)
-      const id = await createUser({ name: email.split("@")[0], email });
-      await AsyncStorage.setItem(USER_STORAGE_KEY, id);
-      setUserId(id);
-      return true;
+      await clerkSignOut();
+      setConvexUserId(null);
     } catch (error) {
-      console.error("Login error:", error);
-      return false;
+      console.error("Sign out error:", error);
     }
   };
 
-  const signup = async (name: string, email: string): Promise<boolean> => {
-    try {
-      const id = await createUser({ name, email });
-      await AsyncStorage.setItem(USER_STORAGE_KEY, id);
-      setUserId(id);
-      return true;
-    } catch (error) {
-      console.error("Signup error:", error);
-      return false;
-    }
-  };
-
-  const logout = async () => {
-    try {
-      await AsyncStorage.removeItem(USER_STORAGE_KEY);
-      setUserId(null);
-    } catch (error) {
-      console.error("Logout error:", error);
-    }
-  };
-
-  // Convex auto-refreshes, this is for explicit refresh calls
   const refreshUser = () => {
-    // No-op: Convex useQuery automatically updates
+    // Convex useQuery automatically updates
   };
+
+  // Loading states
+  const isLoading = !isClerkLoaded || (isSignedIn && !convexUser && isSyncing);
+
+  // Check if fully authenticated (both Clerk and Convex)
+  const isAuthenticated = isSignedIn && !!convexUserId && !!convexUser;
 
   // Check if user needs onboarding
-  const needsOnboarding = !!user && !user.onboardingCompleted;
+  const needsOnboarding = isAuthenticated && !convexUser?.onboardingCompleted;
+
+  // Check if user needs to set username (OAuth users without username)
+  const needsUsername = isAuthenticated && !convexUser?.username;
 
   return (
     <AuthContext.Provider
       value={{
-        user: user ?? null,
-        userId,
+        // Clerk state
+        isClerkLoaded,
+        isSignedIn: isSignedIn ?? false,
+        clerkUser: clerkUser ?? null,
+
+        // Convex user
+        user: convexUser ?? null,
+        userId: convexUserId,
+
+        // Combined state
         isLoading,
-        isAuthenticated: !!userId && !!user,
+        isAuthenticated,
         needsOnboarding,
-        login,
-        signup,
-        logout,
+        needsUsername,
+
+        // Actions
+        signOut,
         refreshUser,
       }}
     >

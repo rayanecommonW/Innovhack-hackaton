@@ -99,17 +99,18 @@ export const getLeaderboard = query({
           userId: user._id,
           name: user.name,
           username: user.username,
+          profileImageUrl: user.profileImageUrl,
           wins,
           earnings: totalEarnings,
           score,
           streak: user.currentStreak || 0,
+          level: Math.max(1, Math.floor(Math.sqrt(((user.totalWins || 0) * 100 + (user.totalLosses || 0) * 20) / 50)) + 1),
         };
       })
     );
 
-    // Trier par score et limiter
+    // Trier par score et limiter - include users with 0 score too for global leaderboard
     const sorted = userScores
-      .filter((u) => u.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map((u, index) => ({ ...u, rank: index + 1 }));
@@ -207,6 +208,200 @@ export const updateUserStats = internalMutation({
   },
 });
 
+// Get completed days for streak calendar (current month)
+export const getCompletedDays = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    // Get proofs submitted by user this month
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+    const proofs = await ctx.db
+      .query("proofs")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    // Filter proofs from this month that were validated
+    const thisMonthProofs = proofs.filter(p =>
+      p.submittedAt >= startOfMonth &&
+      (p.organizerValidation === "approved" || p.communityValidation === "approved")
+    );
+
+    // Extract unique days
+    const completedDays = [...new Set(
+      thisMonthProofs.map(p => new Date(p.submittedAt).getDate())
+    )];
+
+    return completedDays.sort((a, b) => a - b);
+  },
+});
+
+// Get user level and XP based on activity
+export const getUserLevel = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) return { level: 1, xp: 0, xpToNextLevel: 100, totalXp: 0 };
+
+    // Get participations for XP calculation
+    const participations = await ctx.db
+      .query("participations")
+      .withIndex("by_user", (q) => q.eq("usertId", args.userId))
+      .collect();
+
+    // Get user badges for bonus XP
+    const userBadges = await ctx.db
+      .query("userBadges")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    // Get proofs submitted
+    const proofs = await ctx.db
+      .query("proofs")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    // Calculate XP from various sources
+    // - Won pact = 100 XP
+    // - Lost pact = 20 XP (participation reward)
+    // - Submitted proof = 10 XP
+    // - Approved proof = 25 XP bonus
+    // - Each badge = 50 XP
+    // - Streak bonus = currentStreak * 10 XP
+    // - Created pact = 30 XP
+
+    const wonPacts = participations.filter(p => p.status === "won").length;
+    const lostPacts = participations.filter(p => p.status === "lost").length;
+    const activePacts = participations.filter(p => p.status === "active").length;
+    const approvedProofs = proofs.filter(p => p.organizerValidation === "approved").length;
+    const pendingProofs = proofs.filter(p => p.organizerValidation === "pending").length;
+    const streak = user.currentStreak || 0;
+    const badgeCount = userBadges.length;
+
+    // Get created challenges count
+    const createdChallenges = await ctx.db
+      .query("challenges")
+      .withIndex("by_creator", (q) => q.eq("creatorId", args.userId))
+      .collect();
+
+    const totalXp =
+      (wonPacts * 100) +
+      (lostPacts * 20) +
+      (activePacts * 10) +
+      (proofs.length * 10) +
+      (approvedProofs * 25) +
+      (badgeCount * 50) +
+      (streak * 10) +
+      (createdChallenges.length * 30);
+
+    // Level calculation: level = floor(sqrt(xp / 50)) + 1
+    // Level 1 = 0-49 XP, Level 2 = 50-199 XP, Level 3 = 200-449 XP, etc.
+    const level = Math.max(1, Math.floor(Math.sqrt(totalXp / 50)) + 1);
+
+    // XP progress within current level
+    const xpForCurrentLevel = level === 1 ? 0 : ((level - 1) * (level - 1) * 50);
+    const xpForNextLevel = level * level * 50;
+    const xpInLevel = totalXp - xpForCurrentLevel;
+    const xpNeededForNext = xpForNextLevel - xpForCurrentLevel;
+
+    return {
+      level,
+      xp: xpInLevel,
+      xpToNextLevel: xpNeededForNext,
+      totalXp,
+      // Breakdown for display
+      breakdown: {
+        wonPacts,
+        lostPacts,
+        approvedProofs,
+        badges: badgeCount,
+        streak,
+        createdPacts: createdChallenges.length,
+      },
+    };
+  },
+});
+
+// Leaderboard amis
+export const getFriendsLeaderboard = query({
+  args: {
+    userId: v.id("users"),
+    period: v.optional(v.string()), // "all_time", "monthly", "weekly"
+  },
+  handler: async (ctx, args) => {
+    // Get user's friends
+    const friendships = await ctx.db
+      .query("friendships")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("status"), "accepted"),
+          q.or(
+            q.eq(q.field("userId"), args.userId),
+            q.eq(q.field("friendId"), args.userId)
+          )
+        )
+      )
+      .collect();
+
+    // Get friend IDs + include self
+    const friendIds = friendships.map((f) =>
+      f.userId === args.userId ? f.friendId : f.userId
+    );
+    friendIds.push(args.userId); // Include self in friends leaderboard
+
+    // Calculate scores for each friend
+    const friendScores = await Promise.all(
+      friendIds.map(async (friendId) => {
+        const user = await ctx.db.get(friendId);
+        if (!user) return null;
+
+        const participations = await ctx.db
+          .query("participations")
+          .withIndex("by_user", (q) => q.eq("usertId", friendId))
+          .collect();
+
+        // Filter by period
+        let filteredParticipations = participations;
+        if (args.period === "weekly") {
+          const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+          filteredParticipations = participations.filter((p) => (p.joinedAt || 0) >= weekAgo);
+        } else if (args.period === "monthly") {
+          const monthAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+          filteredParticipations = participations.filter((p) => (p.joinedAt || 0) >= monthAgo);
+        }
+
+        const wins = filteredParticipations.filter((p) => p.status === "won").length;
+        const totalEarnings = filteredParticipations
+          .filter((p) => p.earnings)
+          .reduce((sum, p) => sum + (p.earnings || 0), 0);
+
+        // Score = wins * 100 + earnings
+        const score = wins * 100 + Math.floor(totalEarnings);
+
+        return {
+          userId: friendId,
+          name: user.name,
+          username: user.username,
+          profileImageUrl: user.profileImageUrl,
+          wins,
+          earnings: totalEarnings,
+          score,
+          streak: user.currentStreak || 0,
+          isCurrentUser: friendId === args.userId,
+        };
+      })
+    );
+
+    // Filter nulls, sort by score
+    const sorted = friendScores
+      .filter((u): u is NonNullable<typeof u> => u !== null)
+      .sort((a, b) => b.score - a.score)
+      .map((u, index) => ({ ...u, rank: index + 1 }));
+
+    return sorted;
+  },
+});
+
 // Stats globales de la plateforme
 export const getPlatformStats = query({
   handler: async (ctx) => {
@@ -296,5 +491,17 @@ export const updateLeaderboard = internalMutation({
     }
 
     return { updated: sorted.filter((s) => s.score > 0).length };
+  },
+});
+
+// Reset le leaderboard (admin only)
+export const resetLeaderboard = mutation({
+  handler: async (ctx) => {
+    // Supprimer toutes les entrées du leaderboard
+    const entries = await ctx.db.query("leaderboard").collect();
+    for (const entry of entries) {
+      await ctx.db.delete(entry._id);
+    }
+    return { deleted: entries.length };
   },
 });

@@ -3,8 +3,10 @@
  * User CRUD, profile updates, image upload, blocking, reporting
  */
 
-import { mutation, query } from "./_generated/server";
+import { mutation, query, action } from "./_generated/server";
 import { v } from "convex/values";
+import { api } from "./_generated/api";
+import { verifyAuthenticatedUser, requireAuthenticatedUser } from "./authHelper";
 
 // Créer un utilisateur (pour la démo)
 export const createUser = mutation({
@@ -108,13 +110,13 @@ export const getPublicProfile = query({
 
     const activePacts = participations.filter((p) => p.status === "active").length;
 
+    // Note: balance intentionally excluded from public profile for privacy
     return {
       _id: user._id,
       name: user.name,
       username: user.username,
       bio: user.bio,
       profileImageUrl,
-      balance: user.balance,
       totalWins: user.totalWins,
       totalLosses: user.totalLosses,
       currentStreak: user.currentStreak || 0,
@@ -163,6 +165,9 @@ export const updateBalance = mutation({
     amount: v.number(), // positif = ajouter, négatif = retirer
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui modifie
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("Utilisateur non trouvé");
 
@@ -183,6 +188,9 @@ export const updateProfile = mutation({
     bio: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui modifie
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     const { userId, ...updates } = args;
 
     // Validate username uniqueness if changing
@@ -229,6 +237,9 @@ export const saveProfileImage = mutation({
     storageId: v.id("_storage"),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui modifie
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("Utilisateur non trouvé");
 
@@ -253,6 +264,9 @@ export const saveProfileImage = mutation({
 export const removeProfileImage = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui modifie
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("Utilisateur non trouvé");
 
@@ -277,6 +291,9 @@ export const updateNotificationPreferences = mutation({
     pushToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui modifie
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     await ctx.db.patch(args.userId, {
       notificationsEnabled: args.enabled,
       pushToken: args.pushToken,
@@ -293,6 +310,9 @@ export const blockUser = mutation({
     blockedUserId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui bloque
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("Utilisateur non trouvé");
 
@@ -338,6 +358,9 @@ export const unblockUser = mutation({
     blockedUserId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui débloque
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("Utilisateur non trouvé");
 
@@ -392,6 +415,9 @@ export const reportUser = mutation({
     details: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui signale
+    await verifyAuthenticatedUser(ctx, args.reporterId);
+
     // In a real app, this would store in a reports table
     // For now, we'll just log it
     console.log("User reported:", {
@@ -455,13 +481,36 @@ export const searchUsers = query({
   },
 });
 
-// Complete onboarding
+// Complete onboarding with legal acceptance tracking
 export const completeOnboarding = mutation({
-  args: { userId: v.id("users") },
+  args: {
+    userId: v.id("users"),
+    termsAccepted: v.optional(v.boolean()),
+    privacyAccepted: v.optional(v.boolean()),
+    ageVerified: v.optional(v.boolean()),
+  },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.userId, {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui complète
+    await verifyAuthenticatedUser(ctx, args.userId);
+
+    const now = Date.now();
+    const updates: Record<string, any> = {
       onboardingCompleted: true,
-    });
+    };
+
+    // Track legal acceptance timestamps
+    if (args.termsAccepted) {
+      updates.termsAcceptedAt = now;
+    }
+    if (args.privacyAccepted) {
+      updates.privacyAcceptedAt = now;
+    }
+    if (args.ageVerified) {
+      updates.ageVerified = true;
+      updates.ageVerifiedAt = now;
+    }
+
+    await ctx.db.patch(args.userId, updates);
 
     return { success: true };
   },
@@ -500,6 +549,9 @@ export const addFunds = mutation({
     reference: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui ajoute des fonds
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("Utilisateur non trouvé");
     if (args.amount <= 0) throw new Error("Montant invalide");
@@ -539,6 +591,309 @@ export const getTransactions = query({
 export const listUsers = query({
   handler: async (ctx) => {
     return await ctx.db.query("users").collect();
+  },
+});
+
+/**
+ * Get or create user from Clerk authentication
+ * Called when user signs in via Clerk (Google, Apple, Email)
+ */
+export const getOrCreateUserFromClerk = mutation({
+  args: {
+    clerkId: v.string(),
+    email: v.string(),
+    name: v.string(),
+    profileImageUrl: v.optional(v.string()),
+    username: v.optional(v.string()),
+    birthDate: v.optional(v.number()),
+    ageVerified: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    // First, try to find by Clerk ID
+    const existingByClerk = await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (existingByClerk) {
+      // Update profile image if changed
+      if (args.profileImageUrl && args.profileImageUrl !== existingByClerk.profileImageUrl) {
+        await ctx.db.patch(existingByClerk._id, {
+          profileImageUrl: args.profileImageUrl,
+        });
+      }
+      return existingByClerk._id;
+    }
+
+    // Then, try to find by email (for existing users migrating to Clerk)
+    const existingByEmail = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .first();
+
+    if (existingByEmail) {
+      // Link existing account to Clerk
+      await ctx.db.patch(existingByEmail._id, {
+        clerkId: args.clerkId,
+        profileImageUrl: args.profileImageUrl || existingByEmail.profileImageUrl,
+      });
+      return existingByEmail._id;
+    }
+
+    // Validate username if provided
+    let validUsername: string | undefined;
+    if (args.username) {
+      const normalizedUsername = args.username.toLowerCase().trim();
+      if (/^[a-zA-Z0-9_]{3,20}$/.test(normalizedUsername)) {
+        // Check if username is available
+        const existingUsername = await ctx.db
+          .query("users")
+          .withIndex("by_username", (q) => q.eq("username", normalizedUsername))
+          .first();
+        if (!existingUsername) {
+          validUsername = normalizedUsername;
+        }
+      }
+    }
+
+    // Create new user
+    const userId = await ctx.db.insert("users", {
+      clerkId: args.clerkId,
+      name: args.name,
+      email: args.email,
+      username: validUsername,
+      profileImageUrl: args.profileImageUrl,
+      balance: 0, // No free money for real accounts
+      totalWins: 0,
+      totalLosses: 0,
+      createdAt: Date.now(),
+      onboardingCompleted: false,
+      // Age verification
+      birthDate: args.birthDate,
+      ageVerified: args.ageVerified || false,
+      ageVerifiedAt: args.ageVerified ? Date.now() : undefined,
+    });
+
+    return userId;
+  },
+});
+
+/**
+ * Delete user account data from Convex (internal mutation)
+ */
+export const deleteAccountData = mutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui supprime son compte
+    await verifyAuthenticatedUser(ctx, args.userId);
+
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("Utilisateur non trouvé");
+    }
+
+    // Note: Balance check removed - no real money in the app yet
+    // When real payments are implemented, uncomment this:
+    // if (user.balance > 0) {
+    //   throw new Error(`Vous avez encore ${user.balance.toFixed(2)}€ sur votre compte. Retirez votre argent avant de supprimer votre compte.`);
+    // }
+
+    // Check for active participations
+    const activeParticipations = await ctx.db
+      .query("participations")
+      .withIndex("by_user", (q) => q.eq("usertId", args.userId))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .collect();
+
+    if (activeParticipations.length > 0) {
+      throw new Error(`Vous avez ${activeParticipations.length} pact(s) actif(s). Terminez-les avant de supprimer votre compte.`);
+    }
+
+    // Store clerkId before deleting
+    const clerkId = user.clerkId;
+
+    // Delete user's data
+
+    // 1. Delete friendships
+    const friendships1 = await ctx.db
+      .query("friendships")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const f of friendships1) {
+      await ctx.db.delete(f._id);
+    }
+
+    const friendships2 = await ctx.db
+      .query("friendships")
+      .withIndex("by_friend", (q) => q.eq("friendId", args.userId))
+      .collect();
+    for (const f of friendships2) {
+      await ctx.db.delete(f._id);
+    }
+
+    // 2. Delete notifications
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const n of notifications) {
+      await ctx.db.delete(n._id);
+    }
+
+    // 3. Delete activity feed entries
+    const activities = await ctx.db
+      .query("activityFeed")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const a of activities) {
+      await ctx.db.delete(a._id);
+    }
+
+    // 4. Delete proofs
+    const proofs = await ctx.db
+      .query("proofs")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const p of proofs) {
+      await ctx.db.delete(p._id);
+    }
+
+    // 5. Delete old participations (not active)
+    const participations = await ctx.db
+      .query("participations")
+      .withIndex("by_user", (q) => q.eq("usertId", args.userId))
+      .collect();
+    for (const p of participations) {
+      await ctx.db.delete(p._id);
+    }
+
+    // 6. Delete transactions
+    const transactions = await ctx.db
+      .query("transactions")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const t of transactions) {
+      await ctx.db.delete(t._id);
+    }
+
+    // 7. Delete user badges
+    const badges = await ctx.db
+      .query("userBadges")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    for (const b of badges) {
+      await ctx.db.delete(b._id);
+    }
+
+    // 8. Finally delete the user
+    await ctx.db.delete(args.userId);
+
+    return { success: true, clerkId };
+  },
+});
+
+/**
+ * Delete user account completely (action that also deletes from Clerk)
+ */
+export const deleteAccount = action({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    // First delete from Convex and get clerkId
+    const result = await ctx.runMutation(api.users.deleteAccountData, {
+      userId: args.userId,
+    });
+
+    // Then delete from Clerk if clerkId exists
+    if (result.clerkId) {
+      const clerkSecretKey = process.env.CLERK_SECRET_KEY;
+      if (clerkSecretKey) {
+        try {
+          const response = await fetch(
+            `https://api.clerk.com/v1/users/${result.clerkId}`,
+            {
+              method: "DELETE",
+              headers: {
+                Authorization: `Bearer ${clerkSecretKey}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          if (!response.ok) {
+            console.error("Failed to delete Clerk user:", await response.text());
+          }
+        } catch (error) {
+          console.error("Error deleting Clerk user:", error);
+        }
+      }
+    }
+
+    return { success: true };
+  },
+});
+
+/**
+ * Get user by Clerk ID
+ */
+export const getUserByClerkId = query({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("users")
+      .withIndex("by_clerkId", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+  },
+});
+
+/**
+ * Update user fields (flexible)
+ */
+export const updateUser = mutation({
+  args: {
+    userId: v.id("users"),
+    name: v.optional(v.string()),
+    username: v.optional(v.string()),
+    bio: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui modifie
+    await verifyAuthenticatedUser(ctx, args.userId);
+
+    const { userId, ...updates } = args;
+
+    // Validate username if provided
+    if (updates.username) {
+      const normalizedUsername = updates.username.toLowerCase().trim();
+
+      if (!/^[a-zA-Z0-9_]{3,20}$/.test(normalizedUsername)) {
+        throw new Error("Pseudo invalide (3-20 caractères, lettres/chiffres/underscore)");
+      }
+
+      const existing = await ctx.db
+        .query("users")
+        .withIndex("by_username", (q) => q.eq("username", normalizedUsername))
+        .first();
+
+      if (existing && existing._id !== userId) {
+        throw new Error("Ce pseudo est déjà pris");
+      }
+
+      updates.username = normalizedUsername;
+    }
+
+    // Filter out undefined values
+    const cleanUpdates: Record<string, any> = {};
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value !== undefined) {
+        cleanUpdates[key] = value;
+      }
+    });
+
+    if (Object.keys(cleanUpdates).length > 0) {
+      await ctx.db.patch(userId, cleanUpdates);
+    }
+
+    return { success: true };
   },
 });
 

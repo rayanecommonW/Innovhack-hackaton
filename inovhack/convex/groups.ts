@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { verifyAuthenticatedUser } from "./authHelper";
 
 // Generate a random 6-character invite code
 function generateInviteCode(): string {
@@ -19,6 +20,9 @@ export const createGroup = mutation({
     memberIds: v.optional(v.array(v.id("users"))), // Optional friends to add
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est le créateur
+    await verifyAuthenticatedUser(ctx, args.creatorId);
+
     const inviteCode = generateInviteCode();
 
     const groupId = await ctx.db.insert("groups", {
@@ -62,6 +66,9 @@ export const joinGroup = mutation({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui rejoint
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     const group = await ctx.db
       .query("groups")
       .withIndex("by_invite_code", (q) => q.eq("inviteCode", args.inviteCode.toUpperCase()))
@@ -171,6 +178,9 @@ export const createTask = mutation({
     creatorId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est le créateur
+    await verifyAuthenticatedUser(ctx, args.creatorId);
+
     return await ctx.db.insert("groupTasks", {
       ...args,
       status: "active",
@@ -247,6 +257,9 @@ export const completeTask = mutation({
     proofUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui complète
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     const now = Date.now();
     const today = new Date(now);
     today.setHours(0, 0, 0, 0);
@@ -294,6 +307,9 @@ export const leaveGroup = mutation({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui quitte
+    await verifyAuthenticatedUser(ctx, args.userId);
+
     const membership = await ctx.db
       .query("groupMembers")
       .withIndex("by_group_user", (q) =>
@@ -303,6 +319,32 @@ export const leaveGroup = mutation({
 
     if (!membership) {
       throw new Error("Pas membre de ce groupe");
+    }
+
+    // Check for active pacts in this group
+    const activePacts = await ctx.db
+      .query("challenges")
+      .withIndex("by_group", (q) => q.eq("groupId", args.groupId))
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("status"), "active"),
+          q.eq(q.field("status"), "pending")
+        )
+      )
+      .collect();
+
+    // Check if user has active participations in group pacts
+    for (const pact of activePacts) {
+      const participation = await ctx.db
+        .query("participations")
+        .withIndex("by_challenge_user", (q) =>
+          q.eq("challengeId", pact._id).eq("usertId", args.userId)
+        )
+        .first();
+
+      if (participation && participation.status === "active") {
+        throw new Error("Tu as des pacts actifs dans ce groupe. Termine-les d'abord.");
+      }
     }
 
     if (membership.role === "admin") {
@@ -319,5 +361,76 @@ export const leaveGroup = mutation({
     }
 
     await ctx.db.delete(membership._id);
+  },
+});
+
+// Remove a member from group (admin only)
+export const removeMember = mutation({
+  args: {
+    groupId: v.id("groups"),
+    adminId: v.id("users"),
+    memberId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est l'admin
+    await verifyAuthenticatedUser(ctx, args.adminId);
+
+    // Check admin is actually admin
+    const adminMembership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group_user", (q) =>
+        q.eq("groupId", args.groupId).eq("userId", args.adminId)
+      )
+      .first();
+
+    if (!adminMembership || adminMembership.role !== "admin") {
+      throw new Error("Seuls les admins peuvent exclure des membres");
+    }
+
+    // Can't remove yourself this way
+    if (args.adminId === args.memberId) {
+      throw new Error("Utilise 'Quitter le groupe' pour te retirer");
+    }
+
+    // Check member exists
+    const memberMembership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group_user", (q) =>
+        q.eq("groupId", args.groupId).eq("userId", args.memberId)
+      )
+      .first();
+
+    if (!memberMembership) {
+      throw new Error("Ce membre n'est pas dans le groupe");
+    }
+
+    // Check for active pacts in this group
+    const activePacts = await ctx.db
+      .query("challenges")
+      .withIndex("by_group", (q) => q.eq("groupId", args.groupId))
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("status"), "active"),
+          q.eq(q.field("status"), "pending")
+        )
+      )
+      .collect();
+
+    // Check if member has active participations
+    for (const pact of activePacts) {
+      const participation = await ctx.db
+        .query("participations")
+        .withIndex("by_challenge_user", (q) =>
+          q.eq("challengeId", pact._id).eq("usertId", args.memberId)
+        )
+        .first();
+
+      if (participation && participation.status === "active") {
+        throw new Error("Ce membre a des pacts actifs. Attends qu'ils soient terminés.");
+      }
+    }
+
+    await ctx.db.delete(memberMembership._id);
+    return { success: true };
   },
 });
