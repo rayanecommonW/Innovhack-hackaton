@@ -489,7 +489,7 @@ export default function HomeScreen() {
             {/* Join Pact */}
             <TouchableOpacity
               style={[styles.bigActionCard, styles.bigActionSecondary]}
-              onPress={() => setShowNewUserJoinOptions(!showNewUserJoinOptions)}
+              onPress={() => setShowJoinOptions(true)}
               activeOpacity={0.85}
             >
               <View style={[styles.bigActionIconBox, styles.bigActionIconSecondary]}>
@@ -526,46 +526,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Join Pact Options */}
-          {showNewUserJoinOptions && (
-            <Animated.View entering={FadeInDown.duration(200)} style={styles.newUserJoinOptions}>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowNewUserJoinOptions(false);
-                  router.push("/(tabs)/explore");
-                }}
-                style={styles.joinOptionCard}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.joinOptionIconBox, { backgroundColor: Colors.infoMuted }]}>
-                  <Ionicons name="globe-outline" size={22} color={Colors.info} />
-                </View>
-                <View style={styles.joinOptionContent}>
-                  <Text style={styles.joinOptionTitle}>Pacts communautaires</Text>
-                  <Text style={styles.joinOptionDesc}>Explore les défis publics</Text>
-                </View>
-                <Ionicons name="arrow-forward" size={18} color={Colors.textMuted} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => {
-                  setShowNewUserJoinOptions(false);
-                  setShowJoinModal(true);
-                }}
-                style={styles.joinOptionCard}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.joinOptionIconBox, { backgroundColor: Colors.accentMuted }]}>
-                  <Ionicons name="key-outline" size={22} color={Colors.accent} />
-                </View>
-                <View style={styles.joinOptionContent}>
-                  <Text style={styles.joinOptionTitle}>Pact d'un ami</Text>
-                  <Text style={styles.joinOptionDesc}>Entre un code d'invitation</Text>
-                </View>
-                <Ionicons name="arrow-forward" size={18} color={Colors.textMuted} />
-              </TouchableOpacity>
-            </Animated.View>
-          )}
         </Animated.View>
 
         {/* Activity Feed - Only show if there's activity */}
@@ -603,6 +563,73 @@ export default function HomeScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Join Options Modal - Full Screen */}
+      <Modal
+        visible={showJoinOptions}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setShowJoinOptions(false)}
+      >
+        <SafeAreaView style={styles.joinOptionsModal}>
+          <View style={styles.joinOptionsHeader}>
+            <TouchableOpacity
+              onPress={() => setShowJoinOptions(false)}
+              style={styles.joinOptionsCloseBtn}
+            >
+              <Ionicons name="close" size={28} color={Colors.textPrimary} />
+            </TouchableOpacity>
+            <Text style={styles.joinOptionsTitle}>Rejoindre un pact</Text>
+            <View style={{ width: 44 }} />
+          </View>
+
+          <View style={styles.joinOptionsContent}>
+            <Text style={styles.joinOptionsSubtitle}>Comment veux-tu rejoindre ?</Text>
+
+            {/* Community Pacts Option */}
+            <TouchableOpacity
+              onPress={() => {
+                setShowJoinOptions(false);
+                router.push("/(tabs)/explore");
+              }}
+              style={styles.joinOptionsCard}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.joinOptionsIconBox, { backgroundColor: Colors.infoMuted }]}>
+                <Ionicons name="globe" size={40} color={Colors.info} />
+              </View>
+              <Text style={styles.joinOptionsCardTitle}>Pacts communautaires</Text>
+              <Text style={styles.joinOptionsCardDesc}>
+                Explore les défis publics créés par la communauté PACT
+              </Text>
+              <View style={styles.joinOptionsCardArrow}>
+                <Ionicons name="arrow-forward-circle" size={32} color={Colors.info} />
+              </View>
+            </TouchableOpacity>
+
+            {/* Friend's Pact Option */}
+            <TouchableOpacity
+              onPress={() => {
+                setShowJoinOptions(false);
+                setShowJoinModal(true);
+              }}
+              style={styles.joinOptionsCard}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.joinOptionsIconBox, { backgroundColor: Colors.accentMuted }]}>
+                <Ionicons name="key" size={40} color={Colors.accent} />
+              </View>
+              <Text style={styles.joinOptionsCardTitle}>Pact d'un ami</Text>
+              <Text style={styles.joinOptionsCardDesc}>
+                Entre le code à 6 chiffres que ton ami t'a partagé
+              </Text>
+              <View style={styles.joinOptionsCardArrow}>
+                <Ionicons name="arrow-forward-circle" size={32} color={Colors.accent} />
+              </View>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
 
       {/* Join Modal */}
       <Modal
@@ -679,9 +706,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   logoImage: {
-    width: 300,
-    height: 300,
-    marginBottom: Spacing.md,
+    width: 200,
+    height: 120,
+    marginBottom: Spacing.xl,
   },
   ctaButton: {
     flexDirection: "row",
@@ -1414,5 +1441,75 @@ const styles = StyleSheet.create({
   },
   modalBottomSpacer: {
     height: Platform.OS === "ios" ? 20 : 10,
+  },
+
+  // Join Options Modal (Full Screen)
+  joinOptionsModal: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  joinOptionsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  joinOptionsCloseBtn: {
+    width: 44,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  joinOptionsTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: Colors.textPrimary,
+  },
+  joinOptionsContent: {
+    flex: 1,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xl,
+  },
+  joinOptionsSubtitle: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: Colors.textSecondary,
+    textAlign: "center",
+    marginBottom: Spacing.xl,
+  },
+  joinOptionsCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    marginBottom: Spacing.lg,
+    alignItems: "center",
+    ...Shadows.md,
+  },
+  joinOptionsIconBox: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: Spacing.md,
+  },
+  joinOptionsCardTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: Colors.textPrimary,
+    marginBottom: Spacing.sm,
+  },
+  joinOptionsCardDesc: {
+    fontSize: 14,
+    color: Colors.textTertiary,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: Spacing.md,
+  },
+  joinOptionsCardArrow: {
+    marginTop: Spacing.sm,
   },
 });

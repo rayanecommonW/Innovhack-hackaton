@@ -37,7 +37,7 @@ interface NotificationContextType {
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const { userId } = useAuth();
+  const { userId, isAuthenticated } = useAuth();
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notifications.Notification | null>(null);
   const [isRegistered, setIsRegistered] = useState(false);
@@ -76,16 +76,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Save push token when userId changes
+  // Save push token when userId changes (only when Convex auth is ready)
   useEffect(() => {
-    if (userId && expoPushToken) {
+    if (userId && expoPushToken && isAuthenticated) {
       updateNotificationPreferences({
         userId,
         enabled: true,
         pushToken: expoPushToken,
       }).catch(console.error);
     }
-  }, [userId, expoPushToken]);
+  }, [userId, expoPushToken, isAuthenticated]);
 
   const registerForPushNotifications = async (): Promise<string | null> => {
     let token: string | null = null;

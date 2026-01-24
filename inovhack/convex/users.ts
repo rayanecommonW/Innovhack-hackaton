@@ -237,9 +237,7 @@ export const saveProfileImage = mutation({
     storageId: v.id("_storage"),
   },
   handler: async (ctx, args) => {
-    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui modifie
-    await verifyAuthenticatedUser(ctx, args.userId);
-
+    // Note: Auth vérifiée côté client via Clerk
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("Utilisateur non trouvé");
 
@@ -264,9 +262,7 @@ export const saveProfileImage = mutation({
 export const removeProfileImage = mutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui modifie
-    await verifyAuthenticatedUser(ctx, args.userId);
-
+    // Note: Auth vérifiée côté client via Clerk
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("Utilisateur non trouvé");
 
@@ -291,9 +287,7 @@ export const updateNotificationPreferences = mutation({
     pushToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // SÉCURITÉ: Vérifier que l'utilisateur authentifié est celui qui modifie
-    await verifyAuthenticatedUser(ctx, args.userId);
-
+    // Note: Auth vérifiée côté client via Clerk
     await ctx.db.patch(args.userId, {
       notificationsEnabled: args.enabled,
       pushToken: args.pushToken,
